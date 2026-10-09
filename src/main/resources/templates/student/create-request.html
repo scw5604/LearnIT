@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>RapidTutor - Post a Request</title>
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<div th:replace="~{fragments/navbar :: navbar}"></div>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Post a Tutoring Request</h4>
+                </div>
+                <div class="card-body p-4">
+                    <div th:if="${errorMessage}" class="alert alert-danger shadow-sm border-0 mb-4">
+                        <strong><i class="bi bi-exclamation-circle-fill"></i> Error:</strong> <span th:text="${errorMessage}"></span>
+                    </div>
+                    <!-- The form binds to the empty TutoringRequest object passed from the controller -->
+                    <form th:action="@{/student/requests}" th:object="${tutoringRequest}" method="post">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Course</label>
+                            <!-- Hardcoded to HCDD 412 based on your scope reduction strategy -->
+                            <input type="text" class="form-control bg-light" th:field="*{course}" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Topic</label>
+                            <input type="text" class="form-control" th:field="*{topic}" id="topicInput" required placeholder="e.g., UML Sequence Diagrams">
+                            <!-- Placeholder div for the Knowledge Bank AJAX deflection -->
+                            <div id="deflectionResults" class="mt-2 text-danger small"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Problem Description</label>
+                            <textarea class="form-control" th:field="*{shortDescription}" rows="4" required placeholder="Describe your exact conceptual blocker..."></textarea>
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Meeting Method</label>
+                                <select class="form-select" th:field="*{preferredMeetingMethod}" required>
+                                    <option value="" disabled selected>Select method...</option>
+                                    <option value="Zoom">Zoom</option>
+                                    <option value="Teams">Teams</option>
+                                    <option value="Phone Call">Phone call</option>
+                                    <option value="In-Person">In-person</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Response Time</label>
+                                <select class="form-select" th:field="*{desiredResponseTime}" required>
+                                    <option value="" disabled selected>Select urgency...</option>
+                                    <option value="ASAP">ASAP</option>
+                                    <option value="Within 2 hours">Within 2 hours</option>
+                                    <option value="Today">Today</option>
+                                    <option value="Not urgent">Not urgent</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Session Length</label>
+                                <select class="form-select" th:field="*{expectedEffort}" required>
+                                    <option value="" disabled selected>Select duration...</option>
+                                    <option value="Quick explanation (10-15 mins)">Quick explanation (10-15 mins)</option>
+                                    <option value="Concept explanation (20-30 mins)">Concept explanation (20-30 mins)</option>
+                                    <option value="Extended help (30-60 mins)">Extended help (30-60 mins)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Priority Bounty (Tokens)</label>
+                            <input type="number" class="form-control" th:field="*{bountyValue}" min="0" max="50" value="0">
+                            <div class="form-text">Attach tokens from your balance to flag this request as urgent.</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">Submit Request</button>
+                    </form>
+                    <div class="alert alert-warning small mb-4 shadow-sm border-0">
+                        <strong><i class="bi bi-exclamation-triangle-fill"></i> Notice:</strong> Requested response times are not guaranteed. Do not include passwords, grades, student ID, or requests to complete graded work.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+        const topicInput = document.getElementById('topicInput');
+        const deflectionResults = document.getElementById('deflectionResults');
+
+        topicInput.addEventListener('keyup', function() {
+        let query = this.value.trim();
+
+        // Only search if the student has typed at least 4 characters
+        if (query.length > 3) {
+        fetch('/api/knowledge/search?topic=' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {
+        deflectionResults.innerHTML = ''; // Clear previous results
+
+        if (data.length > 0) {
+        let htmlSnippet = '<div class="alert alert-info mt-3 p-3 border-0 shadow-sm">';
+        htmlSnippet += '<h6 class="fw-bold text-primary mb-2"><i class="bi bi-lightbulb-fill"></i> Suggested Solution Found</h6>';
+
+        // Display the first matching Socratic breakdown
+        let article = data[0];
+        htmlSnippet += '<p class="small mb-1"><strong>Past Question:</strong> ' + article.problemDescription + '</p>';
+        htmlSnippet += '<p class="small mb-0 text-dark">' + article.verifiedSolution + '</p>';
+
+        htmlSnippet += '</div>';
+        deflectionResults.innerHTML = htmlSnippet;
+    }
+    })
+        .catch(error => console.error('Error fetching knowledge bank:', error));
+    } else {
+        deflectionResults.innerHTML = ''; // Clear if they backspace
+    }
+    });
+</script>
+
+</body>
+</html>
