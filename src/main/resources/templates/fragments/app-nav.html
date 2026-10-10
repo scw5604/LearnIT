@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<body>
+<nav th:fragment="navbar" class="navbar navbar-expand-lg rt-nav">
+    <div class="container">
+        <a class="navbar-brand" sec:authorize="hasRole('STUDENT')" th:href="@{/student/dashboard}">RapidTutor</a>
+        <a class="navbar-brand" sec:authorize="hasRole('TUTOR')" th:href="@{/tutor/board}">RapidTutor</a>
+        <a class="navbar-brand" sec:authorize="!isAuthenticated()" th:href="@{/login}">RapidTutor</a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#rtNav" aria-controls="rtNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="rtNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item" sec:authorize="hasRole('STUDENT')">
+                    <a class="nav-link active" th:href="@{/student/dashboard}">Requests</a>
+                </li>
+                <li class="nav-item" sec:authorize="hasRole('TUTOR')">
+                    <a class="nav-link" th:href="@{/tutor/board}">Board</a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center gap-3" sec:authorize="isAuthenticated()">
+                <span class="rt-nav-user" sec:authentication="name">username</span>
+                <form th:action="@{/logout}" method="post" class="m-0">
+                    <button type="submit" class="btn btn-sm btn-rt-ghost">Sign out</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
+</body>
+</html>

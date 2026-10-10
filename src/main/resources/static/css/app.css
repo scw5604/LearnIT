@@ -1,0 +1,236 @@
+:root {
+    --rt-bg: #f4efe4;
+    --rt-surface: #FFFF;
+    --rt-text: #1c1b19;
+    --rt-muted: #4a5560;
+    --rt-border: #d5dde5;
+    --rt-accent: #1f4e79;
+    --rt-accent-hover: #173a5a;
+    --rt-danger: #9b2c2c;
+    --rt-ok: #2d6a4f;
+    --rt-footer-bg: #cfd8e2;
+    --rt-footer-text: #4a5560;
+    --rt-radius: 12px;
+    --rt-font: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+html, body {
+    min-height: 100%;
+}
+
+body.rt-body {
+    background: var(--rt-bg);
+    color: var(--rt-text);
+    font-family: var(--rt-font);
+    line-height: 1.5;
+}
+
+.rt-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.rt-main {
+    flex: 1;
+    padding: 1.75rem 0 2.5rem;
+}
+
+.rt-nav {
+    background: var(--rt-surface);
+    border-bottom: 1px solid var(--rt-border);
+    padding: 0.65rem 0;
+}
+
+.rt-nav .navbar-brand {
+    color: var(--rt-text);
+    font-weight: 650;
+    letter-spacing: -0.02em;
+}
+
+.rt-nav .navbar-brand:hover {
+    color: var(--rt-accent);
+}
+
+.rt-nav .nav-link {
+    color: var(--rt-muted);
+    font-size: 0.95rem;
+}
+
+.rt-nav .nav-link:hover,
+.rt-nav .nav-link.active {
+    color: var(--rt-accent);
+}
+
+.rt-nav-user {
+    color: var(--rt-muted);
+    font-size: 0.875rem;
+}
+
+.rt-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.rt-page-header h1 {
+    font-size: 1.35rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.rt-page-header p {
+    margin: 0.25rem 0 0;
+    color: var(--rt-muted);
+    font-size: 0.9rem;
+}
+
+.rt-card {
+    background: var(--rt-surface);
+    border: 1px solid var(--rt-border);
+    border-radius: var(--rt-radius);
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.rt-table {
+    margin: 0;
+    --bs-table-bg: var(--rt-surface);
+    --bs-table-hover-bg: #f3f1ec;
+    color: var(--rt-text);
+}
+
+.rt-table thead th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--rt-muted);
+    border-bottom-color: var(--rt-border);
+    background: #faf9f6;
+    padding: 0.85rem 1rem;
+}
+
+.rt-table tbody td {
+    padding: 0.9rem 1rem;
+    vertical-align: middle;
+    border-color: var(--rt-border);
+    font-size: 0.95rem;
+}
+
+.rt-empty {
+    text-align: center;
+    color: var(--rt-muted);
+    padding: 2.25rem 1rem;
+}
+
+.rt-badge {
+    font-weight: 600;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    border-radius: 999px;
+    padding: 0.3rem 0.6rem;
+}
+
+.rt-badge-open {
+    background: #e8eef5;
+    color: var(--rt-accent);
+}
+
+.rt-badge-claimed {
+    background: #f4efe4;
+    color: #7a5c1e;
+}
+
+.rt-badge-resolved {
+    background: #e7f1ea;
+    color: var(--rt-ok);
+}
+
+.rt-badge-canceled {
+    background: #f6eaea;
+    color: var(--rt-danger);
+}
+
+.btn-rt-primary {
+    background: var(--rt-accent);
+    border-color: var(--rt-accent);
+    color: #fff;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 0.45rem 0.95rem;
+}
+
+.btn-rt-primary:hover {
+    background: var(--rt-accent-hover);
+    border-color: var(--rt-accent-hover);
+    color: #fff;
+}
+
+.btn-rt-ghost {
+    background: transparent;
+    border: 1px solid var(--rt-border);
+    color: var(--rt-text);
+    font-weight: 550;
+    border-radius: 8px;
+}
+
+.btn-rt-ghost:hover {
+    background: #f3f1ec;
+    border-color: #d5d1c9;
+    color: var(--rt-text);
+}
+
+.btn-rt-danger {
+    background: transparent;
+    border: 1px solid #ead5d5;
+    color: var(--rt-danger);
+    font-weight: 550;
+    border-radius: 8px;
+}
+
+.btn-rt-danger:hover {
+    background: #f6eaea;
+    border-color: #d9b3b3;
+    color: var(--rt-danger);
+}
+
+.btn-rt-ok {
+    background: var(--rt-ok);
+    border-color: var(--rt-ok);
+    color: #fff;
+    font-weight: 550;
+    border-radius: 8px;
+}
+
+.btn-rt-ok:hover {
+    background: #245a43;
+    border-color: #245a43;
+    color: #fff;
+}
+
+.rt-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.rt-footer {
+    background: var(--rt-footer-bg);
+    border-top: none;
+    color: var(--rt-footer-text);
+    font-size: 0.8rem;
+    padding: 1rem 0 1.25rem;
+}
+
+.rt-nav .navbar-toggler {
+    border-color: var(--rt-border);
+}
+
+.rt-nav .navbar-toggler-icon {
+    filter: invert(0.35);
+}
