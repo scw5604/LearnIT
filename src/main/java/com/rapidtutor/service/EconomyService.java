@@ -20,9 +20,7 @@ public class EconomyService {
         this.requestRepository = requestRepository;
     }
 
-    /**
-     * Deducts the bounty from the student's balance and creates the ticket in one atomic transaction.
-     */
+    /** Deducts bounty from the student and creates the request in one transaction. */
     @Transactional
     public TutoringRequest createRequestWithBounty(String username, TutoringRequest request, Integer offeredBounty) {
         User student = userRepository.findByUsername(username);
@@ -31,26 +29,20 @@ public class EconomyService {
             throw new IllegalArgumentException("Invalid student account.");
         }
 
-        // Null-safe balance check (defaults to 0 if the database column is empty from earlier seeding)
         int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
-
         if (currentBalance < offeredBounty) {
             throw new IllegalStateException("Insufficient token balance to post this bounty.");
         }
 
-        // Deduct tokens and hold them in the ticket's "escrow"
         student.setTokenBalance(currentBalance - offeredBounty);
         userRepository.save(student);
 
         request.setStudentId(student.getId());
         request.setBountyValue(offeredBounty);
-
         return requestRepository.save(request);
     }
 
-    /**
-     * Transfers the escrowed bounty to the tutor upon successful resolution.
-     */
+    /** Pays the bounty to the assigned tutor and marks the request resolved. */
     @Transactional
     public void resolveAndPayout(Long requestId, Long tutorId) {
         TutoringRequest request = requestRepository.findById(requestId)
@@ -60,26 +52,20 @@ public class EconomyService {
             throw new IllegalStateException("Only claimed requests can be resolved.");
         }
 
-        // Change from findByUsername to findById
         User tutor = userRepository.findById(tutorId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid tutor account."));
 
-        // Payout the bounty safely handling nulls
         int currentBalance = tutor.getTokenBalance() != null ? tutor.getTokenBalance() : 0;
         int bounty = request.getBountyValue() != null ? request.getBountyValue() : 0;
-
         tutor.setTokenBalance(currentBalance + bounty);
         userRepository.save(tutor);
 
-        // Update ticket state
         request.setStatus("RESOLVED");
         request.setResolvedTimestamp(LocalDateTime.now());
         requestRepository.save(request);
     }
 
-    /**
-     * Refunds the tokens if a student cancels their own request before it is resolved.
-     */
+    /** Refunds the bounty and marks the request canceled. */
     @Transactional
     public void cancelAndRefund(Long requestId) {
         TutoringRequest request = requestRepository.findById(requestId)
@@ -92,7 +78,6 @@ public class EconomyService {
         User student = userRepository.findById(request.getStudentId())
                 .orElseThrow(() -> new IllegalArgumentException("Student not found."));
 
-        // Refund the tokens
         int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
         student.setTokenBalance(currentBalance + request.getBountyValue());
         userRepository.save(student);

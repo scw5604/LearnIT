@@ -19,7 +19,6 @@
                     <a class="nav-link" th:href="@{/tutor/board}">Tutor Board</a>
                 </li>
             </ul>
-            <!-- User Info & CSRF Logout Form -->
             <div class="d-flex align-items-center" sec:authorize="isAuthenticated()">
                 <span class="text-light me-3 small">
                     Signed in as: <strong sec:authentication="name">username</strong>

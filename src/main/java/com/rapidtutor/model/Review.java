@@ -16,7 +16,7 @@ public class Review {
     private Long studentId;
 
     @Column(nullable = false)
-    private Integer score; // 1-5 rating
+    private Integer score;
 
     private String feedback;
 

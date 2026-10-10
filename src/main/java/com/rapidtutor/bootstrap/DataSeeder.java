@@ -48,10 +48,7 @@ public class DataSeeder implements CommandLineRunner {
         System.out.println("Synthetic test accounts loaded successfully.");
     }
 
-    /**
-     * Independent of user seeding so an existing user table cannot skip the knowledge bank.
-     * Add another course catalog method and append it here when the bank grows.
-     */
+    /** Loads articles independently of users so a populated user table cannot skip the bank. */
     private void seedKnowledgeBank() {
         if (knowledgeArticleRepository.count() > 0) {
             return;

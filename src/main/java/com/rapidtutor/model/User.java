@@ -16,11 +16,11 @@ public class User {
     private String password;
 
     @Column(nullable = false)
-    private String role; // STUDENT, TUTOR, ADMIN
+    private String role;
 
     private String subjects;
 
-    private Integer tokenBalance = 100; // Starting balance for students
+    private Integer tokenBalance = 100;
     private Integer bountyValue = 0;
 
     public String getSubjects() {

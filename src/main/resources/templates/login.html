@@ -16,7 +16,6 @@
                 </div>
                 <div class="card-body p-4">
 
-                    <!-- Dynamic Alert Banners -->
                     <div th:if="${param.error}" class="alert alert-danger small shadow-sm">
                         Invalid username or password.
                     </div>
@@ -27,7 +26,6 @@
                         Account created! Please log in.
                     </div>
 
-                    <!-- Spring Security expects name="username" and name="password" by default -->
                     <form th:action="@{/login}" method="post">
                         <div class="mb-3">
                             <label class="form-label fw-bold text-muted small text-uppercase">Username</label>

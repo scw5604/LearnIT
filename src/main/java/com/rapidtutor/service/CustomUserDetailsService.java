@@ -23,7 +23,6 @@ public class CustomUserDetailsService implements UserDetailsService {
             throw new UsernameNotFoundException("User not found");
         }
 
-        // Maps role (e.g., "STUDENT") to Spring Security's expected format ("ROLE_STUDENT")
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),

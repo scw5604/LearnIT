@@ -37,7 +37,6 @@
                         <p class="fs-6" th:text="${request.shortDescription}">Problem details</p>
                     </div>
 
-                    <!-- AI Pre-Session Scaffolding Display for the Student -->
                     <div class="alert alert-info border-0 shadow-sm mb-4" th:if="${request.aiDiagnosticNote != null}">
                         <h6 class="fw-bold text-primary mb-2">
                             Socratic Pre-Session Prep
@@ -48,7 +47,6 @@
                         </p>
                     </div>
 
-                    <!-- Lifecycle Actions -->
                     <div class="d-flex gap-2 mt-4" th:if="${request.status == 'OPEN'}">
                         <form th:action="@{/student/requests/{id}/cancel(id=${request.id})}" method="post" class="w-100 m-0">
                             <button type="submit" class="btn btn-outline-danger w-100 py-2 fw-bold">Cancel Request</button>

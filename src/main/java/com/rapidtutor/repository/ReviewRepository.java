@@ -9,7 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
-    // Calculates the average 1-5 star rating for a specific tutor
     @Query("SELECT AVG(r.score) FROM Review r WHERE r.tutorId = :tutorId")
     Double getAverageScoreByTutorId(@Param("tutorId") Long tutorId);
 }

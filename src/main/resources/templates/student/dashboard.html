@@ -1,80 +1,72 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>RapidTutor - Student Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
+<head th:replace="~{fragments/head :: head('RapidTutor · Requests')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
 
-<div th:replace="~{fragments/navbar :: navbar}"></div>
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-page-header">
+                <div>
+                    <h1>My requests</h1>
+                    <p>Track open, claimed, and resolved sessions.</p>
+                </div>
+                <a th:href="@{/student/requests/new}" class="btn btn-rt-primary">Post request</a>
+            </div>
 
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h4 mb-0">My Tutoring Requests</h2>
-        <a th:href="@{/student/requests/new}" class="btn btn-success fw-bold">+ Post New Request</a>
-    </div>
-
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                <tr>
-                    <th>ID</th>
-                    <th>Course</th>
-                    <th>Topic</th>
-                    <th>Status</th>
-                    <th>Effort</th>
-                    <th>Meeting</th>
-                    <th>Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                <!-- FIX 1: Updated colspan from 6 to 7 -->
-                <tr th:if="${#lists.isEmpty(requests)}">
-                    <td colspan="7" class="text-center text-muted py-4">You have no active requests. Post a blocker to get started.</td>
-                </tr>
-
-                <tr th:each="req : ${requests}">
-                    <td class="fw-bold text-muted" th:text="${req.id}">1</td>
-                    <td th:text="${req.course}">HCDD 412</td>
-                    <td th:text="${req.topic}">Topic Name</td>
-                    <td>
-                        <span class="badge bg-primary" th:if="${req.status == 'OPEN'}">OPEN</span>
-                        <span class="badge bg-warning text-dark" th:if="${req.status == 'CLAIMED'}">CLAIMED</span>
-                        <span class="badge bg-success" th:if="${req.status == 'RESOLVED'}">RESOLVED</span>
-                        <!-- FIX 2: Added explicit CANCELED badge -->
-                        <span class="badge bg-danger" th:if="${req.status == 'CANCELED'}">CANCELED</span>
-                    </td>
-                    <td th:text="${req.expectedEffort}">15 mins</td>
-                    <td th:text="${req.preferredMeetingMethod}">Zoom</td>
-
-                    <td>
-                        <!-- Details Button -->
-                        <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-outline-primary fw-bold me-1">Details</a>
-
-                        <!-- Cancel Button (OPEN) -->
-                        <form th:if="${req.status == 'OPEN'}" th:action="@{/student/requests/{id}/cancel(id=${req.id})}" method="post" class="d-inline m-0">
-                            <button type="submit" class="btn btn-sm btn-outline-danger fw-bold">Cancel</button>
-                        </form>
-
-                        <!-- Resolve Button (CLAIMED) -->
-                        <form th:if="${req.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${req.id})}" method="post" class="d-inline m-0">
-                            <button type="submit" class="btn btn-sm btn-success fw-bold">Mark Resolved</button>
-                        </form>
-
-                        <!-- FIX 3: Review link for RESOLVED tickets -->
-                        <a th:if="${req.status == 'RESOLVED'}" th:href="@{/student/requests/{id}/review(id=${req.id})}" class="btn btn-sm btn-outline-secondary fw-bold">Leave Review</a>
-
-                        <!-- Static text only for CANCELED tickets -->
-                        <span th:if="${req.status == 'CANCELED'}" class="text-muted small ms-1">Closed</span>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
+            <div class="rt-card">
+                <div class="table-responsive">
+                    <table class="table rt-table mb-0">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Course</th>
+                            <th>Topic</th>
+                            <th>Status</th>
+                            <th>Effort</th>
+                            <th>Meeting</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:if="${#lists.isEmpty(requests)}">
+                            <td colspan="7" class="rt-empty">No requests yet. Post a blocker to get started.</td>
+                        </tr>
+                        <tr th:each="req : ${requests}">
+                            <td class="text-muted" th:text="${req.id}">1</td>
+                            <td th:text="${req.course}">HCDD 412</td>
+                            <td th:text="${req.topic}">Topic Name</td>
+                            <td>
+                                <span class="rt-badge rt-badge-open" th:if="${req.status == 'OPEN'}">Open</span>
+                                <span class="rt-badge rt-badge-claimed" th:if="${req.status == 'CLAIMED'}">Claimed</span>
+                                <span class="rt-badge rt-badge-resolved" th:if="${req.status == 'RESOLVED'}">Resolved</span>
+                                <span class="rt-badge rt-badge-canceled" th:if="${req.status == 'CANCELED'}">Canceled</span>
+                            </td>
+                            <td th:text="${req.expectedEffort}">15 mins</td>
+                            <td th:text="${req.preferredMeetingMethod}">Zoom</td>
+                            <td>
+                                <div class="rt-actions">
+                                    <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Details</a>
+                                    <form th:if="${req.status == 'OPEN'}" th:action="@{/student/requests/{id}/cancel(id=${req.id})}" method="post" class="m-0">
+                                        <button type="submit" class="btn btn-sm btn-rt-danger">Cancel</button>
+                                    </form>
+                                    <form th:if="${req.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${req.id})}" method="post" class="m-0">
+                                        <button type="submit" class="btn btn-sm btn-rt-ok">Mark resolved</button>
+                                    </form>
+                                    <a th:if="${req.status == 'RESOLVED'}" th:href="@{/student/requests/{id}/review(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Leave review</a>
+                                    <span th:if="${req.status == 'CANCELED'}" class="text-muted small">Closed</span>
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
+    </main>
 
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
 </body>
 </html>

@@ -15,7 +15,6 @@ public class AiDiagnosisService {
     private final RestClient restClient;
     private final TutoringRequestRepository repository;
 
-    // Uses a mock key if you haven't set a real one in application.properties
     @Value("${gemini.api.key:mock-key}")
     private String apiKey;
 
@@ -26,13 +25,11 @@ public class AiDiagnosisService {
 
     @Async
     public void generateDiagnosticScaffold(Long requestId, String course, String topic, String description) {
-        // Graceful fallback for offline demo mode
         if ("mock-key".equals(apiKey)) {
             saveDiagnosis(requestId, "Diagnostic Note (Offline Demo): Verify student environment and check baseline syntax for " + topic + ".");
             return;
         }
 
-        // The strict Socratic prompt contract[cite: 2]
         String prompt = String.format(
                 "Act as an academic peer tutor. For course: %s, topic: %s, description: %s. " +
                         "Provide a 3-bullet response: 1) Underlying Core Concept, 2) Diagnostic Question to Ask, 3) Suggested Starting Step. Do NOT write code or provide the final answer.",
@@ -50,7 +47,6 @@ public class AiDiagnosisService {
                     .retrieve()
                     .body(Map.class);
 
-            // Note: For a production app, you would parse the specific JSON tree. toString() is a fast MVP workaround.
             String result = response.toString();
             saveDiagnosis(requestId, result);
         } catch (Exception e) {

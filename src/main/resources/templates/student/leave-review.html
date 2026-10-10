@@ -18,7 +18,6 @@
                     <p class="text-muted mb-4">Did the tutor help you understand the core concept?</p>
 
                     <form th:action="@{/student/reviews}" th:object="${review}" method="post">
-                        <!-- Hidden fields to retain the relationship mappings -->
                         <input type="hidden" th:field="*{tutorId}" />
                         <input type="hidden" th:field="*{studentId}" />
 

@@ -18,7 +18,6 @@ public class KnowledgeAPIController {
 
     @GetMapping("/search")
     public List<KnowledgeArticle> searchKnowledgeBank(@RequestParam String topic) {
-        // Hardcoded to HCDD 412 to match your MVP scope reduction
         return knowledgeRepository.findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", topic);
     }
 }
