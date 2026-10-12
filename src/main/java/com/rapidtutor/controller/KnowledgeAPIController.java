@@ -1,5 +1,6 @@
 package com.rapidtutor.controller;
 
+import com.rapidtutor.model.Courses;
 import com.rapidtutor.model.KnowledgeArticle;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +18,11 @@ public class KnowledgeAPIController {
     }
 
     @GetMapping("/search")
-    public List<KnowledgeArticle> searchKnowledgeBank(@RequestParam String topic) {
-        return knowledgeRepository.findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", topic);
+    public List<KnowledgeArticle> searchKnowledgeBank(@RequestParam String topic, @RequestParam String course) {
+        String canonicalCourse = Courses.canonical(course);
+        if (canonicalCourse == null || topic == null || topic.isBlank()) {
+            return List.of();
+        }
+        return knowledgeRepository.findByCourseIgnoreCaseAndTopicContainingIgnoreCase(canonicalCourse, topic.trim());
     }
 }

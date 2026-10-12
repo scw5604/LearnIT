@@ -1,54 +1,49 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>RapidTutor - Login</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light d-flex align-items-center" style="min-height: 100vh;">
+<head th:replace="~{fragments/head :: head('RapidTutor · Sign in')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-5">
-            <div class="card shadow-sm border-0 rounded-3">
-                <div class="card-header bg-dark text-white text-center py-3 border-bottom-0 rounded-top">
-                    <h4 class="mb-0 fw-bold">RapidTutor Login</h4>
-                </div>
-                <div class="card-body p-4">
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-auth-wrap">
+                <div class="rt-panel">
+                    <h1>Sign in</h1>
+                    <p class="text-muted mb-4">Students, tutors, and admins use the same page.</p>
 
-                    <div th:if="${param.error}" class="alert alert-danger small shadow-sm">
+                    <div th:if="${param.error}" class="alert alert-danger" role="alert">
                         Invalid username or password.
                     </div>
-                    <div th:if="${param.logout}" class="alert alert-info small shadow-sm">
-                        You have been logged out successfully.
+                    <div th:if="${param.logout}" class="alert alert-info" role="alert">
+                        You have been signed out.
                     </div>
-                    <div th:if="${param.registered}" class="alert alert-success small shadow-sm">
-                        Account created! Please log in.
+                    <div th:if="${param.registered}" class="alert alert-success" role="alert">
+                        Account created. Sign in to continue.
                     </div>
 
                     <form th:action="@{/login}" method="post">
                         <div class="mb-3">
-                            <label class="form-label fw-bold text-muted small text-uppercase">Username</label>
-                            <input type="text" class="form-control bg-light" name="username" required autofocus>
+                            <label class="form-label" for="username">Username</label>
+                            <input id="username" type="text" class="form-control" name="username" required autofocus>
                         </div>
-
                         <div class="mb-4">
-                            <label class="form-label fw-bold text-muted small text-uppercase">Password</label>
-                            <input type="password" class="form-control bg-light" name="password" required>
+                            <label class="form-label" for="password">Password</label>
+                            <input id="password" type="password" class="form-control" name="password" required>
                         </div>
-
-                        <button type="submit" class="btn btn-dark w-100 fw-bold py-2 shadow-sm">Sign In</button>
+                        <button type="submit" class="btn btn-rt-primary w-100">Sign in</button>
                     </form>
 
-                    <div class="text-center mt-4 pt-3 border-top">
-                        <span class="text-muted small">Don't have an account?</span>
-                        <a th:href="@{/register}" class="text-decoration-none fw-bold small ms-1">Sign up here</a>
-                    </div>
+                    <p class="text-center mt-4 mb-0">
+                        <span class="text-muted">Need a student account?</span>
+                        <a th:href="@{/register}">Create one</a>
+                    </p>
                 </div>
             </div>
         </div>
-    </div>
-</div>
+    </main>
 
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
 </body>
 </html>

@@ -1,13 +1,14 @@
 package com.rapidtutor.bootstrap;
 
+import com.rapidtutor.model.Courses;
 import com.rapidtutor.model.KnowledgeArticle;
 import com.rapidtutor.model.User;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
 import com.rapidtutor.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -15,10 +16,13 @@ public class DataSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final KnowledgeArticleRepository knowledgeArticleRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public DataSeeder(UserRepository userRepository, KnowledgeArticleRepository knowledgeArticleRepository) {
+    public DataSeeder(UserRepository userRepository, KnowledgeArticleRepository knowledgeArticleRepository,
+                      PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.knowledgeArticleRepository = knowledgeArticleRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -32,33 +36,38 @@ public class DataSeeder implements CommandLineRunner {
             return;
         }
 
-        User student = new User();
-        student.setUsername("student1");
-        student.setPassword("{noop}password");
-        student.setRole("STUDENT");
-        userRepository.save(student);
-
-        User tutor = new User();
-        tutor.setUsername("tutor1");
-        tutor.setPassword("{noop}password");
-        tutor.setRole("TUTOR");
-        tutor.setSubjects("IST440W, IST311");
-        userRepository.save(tutor);
+        userRepository.save(demoUser("student1", "STUDENT", null, 100));
+        userRepository.save(demoUser("tutor1", "TUTOR", Courses.HCDD_412 + ", " + Courses.IST_440W, 100));
+        userRepository.save(demoUser("admin", "ADMIN", null, 0));
 
         System.out.println("Synthetic test accounts loaded successfully.");
     }
 
-    /** Loads articles independently of users so a populated user table cannot skip the bank. */
+    private User demoUser(String username, String role, String subjects, int tokenBalance) {
+        User user = new User();
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode("password"));
+        user.setRole(role);
+        user.setSubjects(subjects);
+        user.setTokenBalance(tokenBalance);
+        return user;
+    }
+
+    /** Loads each course independently so an existing bank still receives a newly added course. */
     private void seedKnowledgeBank() {
-        if (knowledgeArticleRepository.count() > 0) {
-            return;
+        int added = seedCourseIfEmpty(Courses.HCDD_412, hcdd412Articles());
+        added += seedCourseIfEmpty(Courses.IST_440W, ist440wArticles());
+        if (added > 0) {
+            System.out.println("Knowledge bank loaded successfully (" + added + " articles).");
         }
+    }
 
-        List<KnowledgeArticle> articles = new ArrayList<>();
-        articles.addAll(hcdd412Articles());
-
+    private int seedCourseIfEmpty(String course, List<KnowledgeArticle> articles) {
+        if (knowledgeArticleRepository.countByCourse(course) > 0) {
+            return 0;
+        }
         knowledgeArticleRepository.saveAll(articles);
-        System.out.println("Knowledge bank loaded successfully (" + articles.size() + " articles).");
+        return articles.size();
     }
 
     private List<KnowledgeArticle> hcdd412Articles() {
@@ -117,6 +126,26 @@ public class DataSeeder implements CommandLineRunner {
                         new KnowledgeArticle("HCDD 412", "Agile Methodologies - Scrum Master Role",
                                 "We are setting up our team roles for the project. Is the Scrum Master basically just the Project Manager who assigns all the coding tasks?",
                                 "Concept: Servant-leadership in Agile. Breakdown: No. In Agile Scrum, the development team is self-organizing and assigns their own tasks. The Scrum Master acts as a facilitator and coach, ensuring the team follows Scrum practices and helping remove any blockers (impediments) that slow the team down.")
+        );
+    }
+
+    private List<KnowledgeArticle> ist440wArticles() {
+        return List.of(
+                new KnowledgeArticle(Courses.IST_440W, "Sprint goal versus a task list",
+                        "Our sprint backlog is a long list of tasks. Is that the same thing as a sprint goal?",
+                        "Concept: A sprint goal is one outcome the team commits to this sprint. Breakdown: Tasks are the work that serves that outcome. If the list has no shared outcome, write one sentence that says what will be true for the user when the sprint ends, then keep only the tasks that move that sentence forward."),
+                new KnowledgeArticle(Courses.IST_440W, "Stakeholder interviews",
+                        "I sent a 20-question survey to our sponsor. Do I still need an interview?",
+                        "Concept: Interviews uncover goals a survey cannot phrase in advance. Breakdown: Ask what decision the sponsor has to make, what they do today, and what failure looks like. Use the survey later to check how widely those answers apply."),
+                new KnowledgeArticle(Courses.IST_440W, "Risk register",
+                        "I listed 'the project might be late' as our only risk. What else belongs in the register?",
+                        "Concept: A risk is a specific uncertain event, plus how likely it is and how bad it is. Breakdown: Replace the vague line with events such as 'the sponsor is unavailable in week 3' or 'the external API changes.' For each one, note likelihood, impact, and the action you will take if it happens."),
+                new KnowledgeArticle(Courses.IST_440W, "Acceptance criteria",
+                        "Our story says 'the user can log in.' How do I write acceptance criteria that a teammate can test?",
+                        "Concept: Acceptance criteria are observable checks, not a restatement of the story. Breakdown: State the starting condition, the action, and the visible result. Example: given a registered account, when the password matches, the user lands on the dashboard. Include one failure case, such as a wrong password."),
+                new KnowledgeArticle(Courses.IST_440W, "Useful peer review comments",
+                        "I reviewed a teammate's section and wrote 'looks good' because I did not want to be harsh. What should a review comment say?",
+                        "Concept: A useful comment points at a specific spot and a specific gap. Breakdown: Name the section, say what a reader cannot do or understand there, and suggest the change. 'Looks good' does not tell the author what to keep or what to fix.")
         );
     }
 }

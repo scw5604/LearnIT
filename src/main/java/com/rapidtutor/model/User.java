@@ -21,7 +21,6 @@ public class User {
     private String subjects;
 
     private Integer tokenBalance = 100;
-    private Integer bountyValue = 0;
 
     public String getSubjects() {
         return subjects;
@@ -69,11 +68,5 @@ public class User {
 
     public void setTokenBalance(Integer tokenBalance) {
         this.tokenBalance = tokenBalance;
-    }
-    public Integer getBountyValue() {
-        return bountyValue;
-    }
-    public void setBountyValue(Integer bountyValue) {
-        this.bountyValue = bountyValue;
     }
 }

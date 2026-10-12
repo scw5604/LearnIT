@@ -1,77 +1,79 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>RapidTutor - Tutor Board</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
+<head th:replace="~{fragments/head :: head('RapidTutor · Tutor board')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
 
-<div th:replace="~{fragments/navbar :: navbar}"></div>
-
-<div class="container">
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="h5 mb-0 text-primary fw-bold">My Active Sessions</h2>
-        </div>
-
-        <div class="row mb-5">
-            <div class="col-md-6 mb-4" th:each="req : ${myClaimedRequests}">
-                <div class="card shadow-sm border-primary h-100">
-                    <div class="card-header bg-primary text-white pt-3 pb-2 d-flex justify-content-between align-items-center">
-                        <span class="badge bg-light text-primary" th:text="${req.course}">Course</span>
-                        <span class="small fw-bold">CLAIMED</span>
-                    </div>
-                    <div class="card-body">
-                        <h5 class="card-title fw-bold" th:text="${req.topic}">Topic</h5>
-                        <p class="card-text text-secondary mb-3" th:text="${req.shortDescription}">Description</p>
-                    </div>
-                    <div class="card-footer bg-white border-top-0 pb-3 d-flex gap-2">
-                        <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-outline-primary w-100 fw-bold">View Workspace</a>
-                    </div>
-                </div>
-            </div>
-            <div th:if="${#lists.isEmpty(myClaimedRequests)}" class="col-12 text-muted small py-2">
-                <em>You have no active claimed sessions.</em>
-            </div>
-        </div>
-
-        <hr class="mb-5">
-
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="h4 mb-0">Open Tutoring Requests</h2>
-        </div>
-
-        <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
-        <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
-
-        <div class="row">
-            <div class="col-md-6 mb-4" th:each="req : ${requests}">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
-                        <span class="badge bg-dark" th:text="${req.course}">Course</span>
-                        <span class="text-muted small">
-                        Posted: <strong th:text="${#temporals.format(req.creationTimestamp, 'MMM dd, h:mm a')}">Time</strong>
-                    </span>
-                    </div>
-                    <div class="card-body">
-                        <h5 class="card-title fw-bold" th:text="${req.topic}">Topic</h5>
-                        <p class="card-text text-secondary mb-3" th:text="${req.shortDescription}">Problem Description</p>
-                    </div>
-                    <div class="card-footer bg-white border-top-0 pb-4 d-flex gap-2">
-                        <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-outline-primary w-50 fw-bold">View Details</a>
-                        <form th:action="@{/tutor/claim/{id}(id=${req.id})}" method="post" class="w-50 m-0">
-                            <button type="submit" class="btn btn-success w-100 fw-bold">Claim Request</button>
-                        </form>
-                    </div>
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-page-header">
+                <div>
+                    <h1>Tutor board</h1>
+                    <p>
+                        Open requests in your subjects:
+                        <span th:text="${tutorSubjects}">HCDD 412, IST 440W</span>
+                    </p>
+                    <p th:if="${myAverageScore != null}">
+                        Your average rating is
+                        <strong th:text="${#numbers.formatDecimal(myAverageScore, 1, 1)}">5.0</strong>
+                        out of 5.
+                    </p>
+                    <p th:if="${myAverageScore == null}">You do not have any ratings yet.</p>
                 </div>
             </div>
 
-            <div th:if="${#lists.isEmpty(requests)}" class="col-12 text-center text-muted py-5">
-                <h5>No open requests at this time.</h5>
+            <div th:replace="~{fragments/alerts :: alerts}"></div>
+
+            <h2 class="h5 mb-3">My active sessions</h2>
+            <div class="row g-3 mb-5">
+                <div class="col-md-6" th:each="req : ${myClaimedRequests}">
+                    <article class="rt-card rt-request-card h-100">
+                        <p class="rt-kicker mb-0" th:text="${req.course}">Course</p>
+                        <h2 th:text="${req.topic}">Topic</h2>
+                        <p th:text="${req.shortDescription}">Description</p>
+                        <div class="rt-meta">
+                            <span class="rt-badge rt-badge-claimed">Claimed</span>
+                            <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' tokens'}">0 tokens</span>
+                        </div>
+                        <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Open workspace</a>
+                    </article>
+                </div>
+                <div class="col-12" th:if="${#lists.isEmpty(myClaimedRequests)}">
+                    <p class="text-muted">You have no active sessions.</p>
+                </div>
+            </div>
+
+            <h2 class="h5 mb-3">Open requests</h2>
+            <div class="row g-3">
+                <div class="col-md-6" th:each="req : ${requests}">
+                    <article class="rt-card rt-request-card h-100">
+                        <div class="d-flex justify-content-between gap-2">
+                            <p class="rt-kicker mb-0" th:text="${req.course}">Course</p>
+                            <span class="text-muted small" th:text="${#temporals.format(req.creationTimestamp, 'MMM dd, h:mm a')}">Time</span>
+                        </div>
+                        <h2 th:text="${req.topic}">Topic</h2>
+                        <p th:text="${req.shortDescription}">Description</p>
+                        <div class="rt-meta">
+                            <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' token bounty'}">0 token bounty</span>
+                            <span th:text="${req.preferredMeetingMethod}">Zoom</span>
+                        </div>
+                        <div class="rt-actions">
+                            <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">View details</a>
+                            <form th:action="@{/tutor/claim/{id}(id=${req.id})}" method="post" class="m-0">
+                                <button type="submit" class="btn btn-sm btn-rt-ok">Claim request</button>
+                            </form>
+                        </div>
+                    </article>
+                </div>
+                <div class="col-12" th:if="${#lists.isEmpty(requests)}">
+                    <p class="text-muted">No open requests in your subjects.</p>
+                </div>
             </div>
         </div>
-    </div>
+    </main>
 
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
 </body>
 </html>

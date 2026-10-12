@@ -23,6 +23,10 @@ public class EconomyService {
     /** Deducts bounty from the student and creates the request in one transaction. */
     @Transactional
     public TutoringRequest createRequestWithBounty(String username, TutoringRequest request, Integer offeredBounty) {
+        if (offeredBounty == null || offeredBounty < 0 || offeredBounty > 50) {
+            throw new IllegalArgumentException("Bounty must be between 0 and 50 tokens.");
+        }
+
         User student = userRepository.findByUsername(username);
 
         if (student == null || !student.getRole().equals("STUDENT")) {
@@ -39,6 +43,12 @@ public class EconomyService {
 
         request.setStudentId(student.getId());
         request.setBountyValue(offeredBounty);
+        request.setAssignedTutorId(null);
+        request.setClaimedTimestamp(null);
+        request.setResolvedTimestamp(null);
+        request.setAiDiagnosticNote(null);
+        request.setTutorUsername(null);
+        request.setStatus("OPEN");
         return requestRepository.save(request);
     }
 
@@ -50,6 +60,9 @@ public class EconomyService {
 
         if (!request.getStatus().equals("CLAIMED")) {
             throw new IllegalStateException("Only claimed requests can be resolved.");
+        }
+        if (tutorId == null || !tutorId.equals(request.getAssignedTutorId())) {
+            throw new IllegalArgumentException("This tutor is not assigned to the request.");
         }
 
         User tutor = userRepository.findById(tutorId)
@@ -71,15 +84,16 @@ public class EconomyService {
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Request not found."));
 
-        if (request.getStatus().equals("RESOLVED")) {
-            throw new IllegalStateException("Cannot cancel an already resolved request.");
+        if (!"OPEN".equals(request.getStatus())) {
+            throw new IllegalStateException("Only open requests can be canceled.");
         }
 
         User student = userRepository.findById(request.getStudentId())
                 .orElseThrow(() -> new IllegalArgumentException("Student not found."));
 
         int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
-        student.setTokenBalance(currentBalance + request.getBountyValue());
+        int bounty = request.getBountyValue() != null ? request.getBountyValue() : 0;
+        student.setTokenBalance(currentBalance + bounty);
         userRepository.save(student);
 
         request.setStatus("CANCELED");

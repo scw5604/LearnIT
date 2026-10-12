@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('RapidTutor · Admin')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
+
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-page-header">
+                <div>
+                    <h1>Overview</h1>
+                    <p>Accounts and request counts. Passwords are not shown.</p>
+                </div>
+                <a class="btn btn-rt-primary" th:href="@{/admin/insights}">Learning insights</a>
+            </div>
+
+            <div class="rt-stat-grid">
+                <div class="rt-stat"><span>Open</span><strong th:text="${openCount}">0</strong></div>
+                <div class="rt-stat"><span>Claimed</span><strong th:text="${claimedCount}">0</strong></div>
+                <div class="rt-stat"><span>Resolved</span><strong th:text="${resolvedCount}">0</strong></div>
+                <div class="rt-stat"><span>Canceled</span><strong th:text="${canceledCount}">0</strong></div>
+            </div>
+
+            <div class="rt-card">
+                <div class="table-responsive">
+                    <table class="table rt-table mb-0">
+                        <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Subjects</th>
+                            <th>Tokens</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="user : ${users}">
+                            <td th:text="${user.username}">student1</td>
+                            <td th:text="${user.role}">STUDENT</td>
+                            <td th:text="${user.subjects != null ? user.subjects : '—'}">—</td>
+                            <td th:text="${user.tokenBalance != null ? user.tokenBalance : 0}">0</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
+</body>
+</html>

@@ -8,4 +8,6 @@ import java.util.List;
 @Repository
 public interface KnowledgeArticleRepository extends JpaRepository<KnowledgeArticle, Long> {
     List<KnowledgeArticle> findByCourseIgnoreCaseAndTopicContainingIgnoreCase(String course, String topic);
+
+    long countByCourse(String course);
 }

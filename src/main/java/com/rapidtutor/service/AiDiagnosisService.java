@@ -1,6 +1,8 @@
 package com.rapidtutor.service;
 
 import com.rapidtutor.repository.TutoringRequestRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -12,11 +14,17 @@ import java.util.Map;
 @Service
 public class AiDiagnosisService {
 
+    private static final Logger log = LoggerFactory.getLogger(AiDiagnosisService.class);
+    private static final String FALLBACK = "AI Diagnosis temporarily unavailable. Proceeding with standard human review.";
+
     private final RestClient restClient;
     private final TutoringRequestRepository repository;
 
-    @Value("${gemini.api.key:mock-key}")
+    @Value("${groq.api.key:mock-key}")
     private String apiKey;
+
+    @Value("${groq.model:openai/gpt-oss-20b}")
+    private String model;
 
     public AiDiagnosisService(TutoringRequestRepository repository) {
         this.repository = repository;
@@ -25,8 +33,8 @@ public class AiDiagnosisService {
 
     @Async
     public void generateDiagnosticScaffold(Long requestId, String course, String topic, String description) {
-        if ("mock-key".equals(apiKey)) {
-            saveDiagnosis(requestId, "Diagnostic Note (Offline Demo): Verify student environment and check baseline syntax for " + topic + ".");
+        if (apiKey == null || apiKey.isBlank() || "mock-key".equals(apiKey)) {
+            saveDiagnosis(requestId, offlineNote(topic));
             return;
         }
 
@@ -37,21 +45,29 @@ public class AiDiagnosisService {
         );
 
         try {
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
-            var requestBody = Map.of("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
+            Map<String, Object> requestBody = Map.of(
+                    "model", model,
+                    "messages", List.of(Map.of("role", "user", "content", prompt))
+            );
 
-            Map response = restClient.post()
-                    .uri(url)
+            Map<?, ?> response = restClient.post()
+                    .uri("https://api.groq.com/openai/v1/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
                     .body(requestBody)
                     .retrieve()
                     .body(Map.class);
 
-            String result = response.toString();
-            saveDiagnosis(requestId, result);
+            String result = GroqResponseParser.extractMessageContent(response);
+            saveDiagnosis(requestId, result != null ? result : FALLBACK);
         } catch (Exception e) {
-            saveDiagnosis(requestId, "AI Diagnosis temporarily unavailable. Proceeding with standard human review.");
+            log.warn("AI diagnosis failed: {}", e.getMessage());
+            saveDiagnosis(requestId, FALLBACK);
         }
+    }
+
+    private String offlineNote(String topic) {
+        return "Diagnostic Note (Offline Demo): Verify student environment and check baseline syntax for " + topic + ".";
     }
 
     private void saveDiagnosis(Long requestId, String text) {

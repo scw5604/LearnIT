@@ -22,7 +22,7 @@ RapidTutor is a proof-of-concept Java web application for time-sensitive, on-dem
    - **macOS / Linux:** `./mvnw spring-boot:run`
 4. On a **fresh** database, the console prints when demo users and the knowledge bank are seeded. If you already have a local `data/` folder from a previous run, those messages will not appear.
 
-Gemini AI notes are optional. If `GEMINI_API_KEY` is unset, diagnosis falls back to an offline demo message. The app does not require a cloud key to run.
+Diagnostic notes are optional. If `GROQ_API_KEY` is unset, diagnosis falls back to an offline demo message. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and start the app with that variable set. The key is not stored in the project.
 
 ## Accessing the application
 
@@ -39,10 +39,13 @@ Public registration creates **student** accounts only. Use the seeded tutor acco
 
 `DataSeeder` inserts these users when the `users` table is empty:
 
+Passwords are stored with BCrypt. If you already have a `data/` folder from an older run, stop the app, delete that folder, and start again so these accounts are reseeded.
+
 | Role | Username | Password | Use |
 |---|---|---|---|
 | Student | `student1` | `password` | Post requests, cancel, resolve, review |
-| Tutor | `tutor1` | `password` | View the board and claim open requests |
+| Tutor | `tutor1` | `password` | Board for HCDD 412 and IST 440W |
+| Admin | `admin` | `password` | Overview and learning insights |
 
 ## Architecture and database notes
 

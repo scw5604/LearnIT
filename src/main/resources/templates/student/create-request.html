@@ -1,123 +1,145 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>RapidTutor - Post a Request</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-<div th:replace="~{fragments/navbar :: navbar}"></div>
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Post a Tutoring Request</h4>
-                </div>
-                <div class="card-body p-4">
-                    <div th:if="${errorMessage}" class="alert alert-danger shadow-sm border-0 mb-4">
-                        <strong><i class="bi bi-exclamation-circle-fill"></i> Error:</strong> <span th:text="${errorMessage}"></span>
-                    </div>
-                    <form th:action="@{/student/requests}" th:object="${tutoringRequest}" method="post">
-                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+<head th:replace="~{fragments/head :: head('RapidTutor · Post a request')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Course</label>
-                            <input type="text" class="form-control bg-light" th:field="*{course}" readonly>
-                        </div>
+    <main class="rt-main">
+        <div class="container">
+            <a class="rt-back" th:href="@{/student/dashboard}">Back to requests</a>
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="rt-panel">
+                        <h1>Post a request</h1>
+                        <p class="text-muted" th:if="${currentUser != null}">
+                            Your balance is <strong th:text="${currentUser.tokenBalance != null ? currentUser.tokenBalance : 0}">100</strong> tokens. A bounty can be 0 to 50.
+                        </p>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Topic</label>
-                            <input type="text" class="form-control" th:field="*{topic}" id="topicInput" required placeholder="e.g., UML Sequence Diagrams">
-                            <div id="deflectionResults" class="mt-2 text-danger small"></div>
-                        </div>
+                        <div th:replace="~{fragments/alerts :: alerts}"></div>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Problem Description</label>
-                            <textarea class="form-control" th:field="*{shortDescription}" rows="4" required placeholder="Describe your exact conceptual blocker..."></textarea>
-                        </div>
-                        <div class="row mb-4">
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Meeting Method</label>
-                                <select class="form-select" th:field="*{preferredMeetingMethod}" required>
-                                    <option value="" disabled selected>Select method...</option>
-                                    <option value="Zoom">Zoom</option>
-                                    <option value="Teams">Teams</option>
-                                    <option value="Phone Call">Phone call</option>
-                                    <option value="In-Person">In-person</option>
+                        <form th:action="@{/student/requests}" th:object="${tutoringRequest}" method="post">
+                            <div class="mb-3">
+                                <label class="form-label" for="courseInput">Course</label>
+                                <select class="form-select" th:field="*{course}" id="courseInput" required>
+                                    <option th:each="course : ${courses}" th:value="${course}" th:text="${course}">HCDD 412</option>
                                 </select>
                             </div>
 
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Response Time</label>
-                                <select class="form-select" th:field="*{desiredResponseTime}" required>
-                                    <option value="" disabled selected>Select urgency...</option>
-                                    <option value="ASAP">ASAP</option>
-                                    <option value="Within 2 hours">Within 2 hours</option>
-                                    <option value="Today">Today</option>
-                                    <option value="Not urgent">Not urgent</option>
-                                </select>
+                            <div class="mb-3">
+                                <label class="form-label" for="topicInput">Topic</label>
+                                <input type="text" class="form-control" th:field="*{topic}" id="topicInput" required placeholder="e.g., UML Sequence Diagrams">
+                                <div id="deflectionResults" class="mt-2"></div>
                             </div>
 
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold">Session Length</label>
-                                <select class="form-select" th:field="*{expectedEffort}" required>
-                                    <option value="" disabled selected>Select duration...</option>
-                                    <option value="Quick explanation (10-15 mins)">Quick explanation (10-15 mins)</option>
-                                    <option value="Concept explanation (20-30 mins)">Concept explanation (20-30 mins)</option>
-                                    <option value="Extended help (30-60 mins)">Extended help (30-60 mins)</option>
-                                </select>
+                            <div class="mb-3">
+                                <label class="form-label" for="description">Problem description</label>
+                                <textarea id="description" class="form-control" th:field="*{shortDescription}" rows="4" required placeholder="Describe the concept you are stuck on."></textarea>
                             </div>
-                        </div>
 
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">Priority Bounty (Tokens)</label>
-                            <input type="number" class="form-control" th:field="*{bountyValue}" min="0" max="50" value="0">
-                            <div class="form-text">Attach tokens from your balance to flag this request as urgent.</div>
-                        </div>
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <label class="form-label" for="meeting">Meeting method</label>
+                                    <select id="meeting" class="form-select" th:field="*{preferredMeetingMethod}" required>
+                                        <option value="" disabled selected>Select method</option>
+                                        <option value="Zoom">Zoom</option>
+                                        <option value="Teams">Teams</option>
+                                        <option value="Phone Call">Phone call</option>
+                                        <option value="In-Person">In-person</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="urgency">Response time</label>
+                                    <select id="urgency" class="form-select" th:field="*{desiredResponseTime}" required>
+                                        <option value="" disabled selected>Select urgency</option>
+                                        <option value="ASAP">ASAP</option>
+                                        <option value="Within 2 hours">Within 2 hours</option>
+                                        <option value="Today">Today</option>
+                                        <option value="Not urgent">Not urgent</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="effort">Session length</label>
+                                    <select id="effort" class="form-select" th:field="*{expectedEffort}" required>
+                                        <option value="" disabled selected>Select duration</option>
+                                        <option value="Quick explanation (10-15 mins)">Quick explanation (10-15 mins)</option>
+                                        <option value="Concept explanation (20-30 mins)">Concept explanation (20-30 mins)</option>
+                                        <option value="Extended help (30-60 mins)">Extended help (30-60 mins)</option>
+                                    </select>
+                                </div>
+                            </div>
 
-                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">Submit Request</button>
-                    </form>
-                    <div class="alert alert-warning small mb-4 shadow-sm border-0">
-                        <strong><i class="bi bi-exclamation-triangle-fill"></i> Notice:</strong> Requested response times are not guaranteed. Do not include passwords, grades, student ID, or requests to complete graded work.
+                            <div class="mb-4">
+                                <label class="form-label" for="bounty">Priority bounty (tokens)</label>
+                                <input id="bounty" type="number" class="form-control" th:field="*{bountyValue}" min="0" max="50" value="0">
+                                <div class="form-text">Tokens are held until you cancel or the session is resolved.</div>
+                            </div>
+
+                            <button type="submit" class="btn btn-rt-primary w-100">Submit request</button>
+                        </form>
+
+                        <p class="text-muted small mt-4 mb-0">
+                            Response times are not guaranteed. Do not include passwords, grades, a student ID, or a request to complete graded work.
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
 </div>
 
 <script>
-        const topicInput = document.getElementById('topicInput');
-        const deflectionResults = document.getElementById('deflectionResults');
+    const topicInput = document.getElementById('topicInput');
+    const courseInput = document.getElementById('courseInput');
+    const deflectionResults = document.getElementById('deflectionResults');
 
-        topicInput.addEventListener('keyup', function() {
-        let query = this.value.trim();
-
-        if (query.length > 3) {
-        fetch('/api/knowledge/search?topic=' + encodeURIComponent(query))
-        .then(response => response.json())
-        .then(data => {
-        deflectionResults.innerHTML = '';
-
-        if (data.length > 0) {
-        let htmlSnippet = '<div class="alert alert-info mt-3 p-3 border-0 shadow-sm">';
-        htmlSnippet += '<h6 class="fw-bold text-primary mb-2"><i class="bi bi-lightbulb-fill"></i> Suggested Solution Found</h6>';
-
-        let article = data[0];
-        htmlSnippet += '<p class="small mb-1"><strong>Past Question:</strong> ' + article.problemDescription + '</p>';
-        htmlSnippet += '<p class="small mb-0 text-dark">' + article.verifiedSolution + '</p>';
-
-        htmlSnippet += '</div>';
-        deflectionResults.innerHTML = htmlSnippet;
+    function clearSuggestion() {
+        deflectionResults.replaceChildren();
     }
-    })
-        .catch(error => console.error('Error fetching knowledge bank:', error));
-    } else {
-        deflectionResults.innerHTML = '';
+
+    function renderSuggestion(article) {
+        clearSuggestion();
+        const box = document.createElement('div');
+        box.className = 'rt-suggestion';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Suggested solution';
+
+        const question = document.createElement('p');
+        question.textContent = 'Past question: ' + (article.problemDescription || '');
+
+        const solution = document.createElement('p');
+        solution.textContent = article.verifiedSolution || '';
+
+        box.append(title, question, solution);
+        deflectionResults.append(box);
     }
-    });
+
+    function searchKnowledge() {
+        const query = topicInput.value.trim();
+        const course = courseInput.value;
+        if (query.length <= 3 || !course) {
+            clearSuggestion();
+            return;
+        }
+
+        const url = '/api/knowledge/search?topic=' + encodeURIComponent(query) + '&course=' + encodeURIComponent(course);
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.length > 0) {
+                    renderSuggestion(data[0]);
+                } else {
+                    clearSuggestion();
+                }
+            })
+            .catch(() => clearSuggestion());
+    }
+
+    topicInput.addEventListener('keyup', searchKnowledge);
+    courseInput.addEventListener('change', searchKnowledge);
 </script>
-
 </body>
 </html>

@@ -1,78 +1,48 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<head>
-    <meta charset="UTF-8">
-    <title>RapidTutor - Request Details</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('RapidTutor · Request details')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
 
-<div th:replace="~{fragments/navbar :: navbar}"></div>
+    <main class="rt-main">
+        <div class="container">
+            <a class="rt-back" th:href="@{/tutor/board}">Back to the board</a>
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="rt-panel">
+                        <p class="rt-kicker" th:text="${request.course}">Course</p>
+                        <h1 th:text="${request.topic}">Topic</h1>
 
-<div class="container mt-4">
-    <div class="mb-3">
-        <a th:href="@{/tutor/board}" class="text-decoration-none text-muted">
-            &larr; Back to Request Board
-        </a>
-    </div>
-
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center pt-3 pb-3">
-                    <h5 class="mb-0">Request Details</h5>
-                    <span class="badge bg-primary" th:text="${request.course}">Course</span>
-                </div>
-
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between mb-4">
-                        <h3 class="h5 fw-bold" th:text="${request.topic}">Topic</h3>
-                        <span class="badge bg-warning text-dark fs-6" th:if="${request.bountyValue > 0}">
-                            Bounty: <span th:text="${request.bountyValue}"></span> Tokens
-                        </span>
-                    </div>
-
-                    <div class="mb-4">
-                        <h6 class="fw-bold text-muted text-uppercase small">Student's Description</h6>
-                        <p class="fs-6" th:text="${request.shortDescription}">Problem details go here.</p>
-                    </div>
-
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <h6 class="fw-bold text-muted text-uppercase small">Expected Effort</h6>
-                            <p th:text="${request.expectedEffort}">~30 mins</p>
+                        <div class="rt-meta">
+                            <span>Bounty: <strong th:text="${request.bountyValue != null ? request.bountyValue : 0}">0</strong> tokens</span>
+                            <span th:text="${request.expectedEffort}">30 mins</span>
+                            <span th:text="${request.preferredMeetingMethod}">Zoom</span>
+                            <span th:text="${request.desiredResponseTime}">Today</span>
                         </div>
-                        <div class="col-md-6">
-                            <h6 class="fw-bold text-muted text-uppercase small">Meeting Method</h6>
-                            <p th:text="${request.preferredMeetingMethod}">Zoom</p>
+
+                        <p class="rt-kicker">Student's description</p>
+                        <p th:text="${request.shortDescription}">Problem details</p>
+
+                        <div class="rt-suggestion mt-4" th:if="${request.aiDiagnosticNote != null and !#strings.isEmpty(request.aiDiagnosticNote)}">
+                            <h3>AI lesson scaffold</h3>
+                            <p>Use these questions to guide the student. Do not hand over the final answer.</p>
+                            <p class="rt-note" th:text="${request.aiDiagnosticNote}">Diagnostic note</p>
                         </div>
-                    </div>
 
-                    <div class="alert alert-info border-0 shadow-sm mb-4" th:if="${request.aiDiagnosticNote != null}">
-                        <h6 class="fw-bold text-primary mb-2">
-                            <i class="bi bi-robot"></i> AI Triage & Lesson Scaffold
-                        </h6>
-                        <p class="small mb-0" style="white-space: pre-wrap;" th:text="${request.aiDiagnosticNote}">
-                            AI generated notes will appear here.
-                        </p>
-                    </div>
-
-                    <div th:if="${request.status == 'OPEN'}">
-                        <form th:action="@{/tutor/claim/{id}(id=${request.id})}" method="post">
-                            <button type="submit" class="btn btn-success w-100 py-2 fw-bold fs-5">
-                                Claim This Request
-                            </button>
+                        <form class="mt-4" th:if="${request.status == 'OPEN'}" th:action="@{/tutor/claim/{id}(id=${request.id})}" method="post">
+                            <button type="submit" class="btn btn-rt-ok w-100">Claim this request</button>
                         </form>
-                    </div>
-
-                    <div th:if="${request.status != 'OPEN'}" class="alert alert-secondary text-center mb-0">
-                        This request is currently <strong th:text="${request.status}">STATUS</strong> and cannot be claimed.
+                        <p class="text-muted mt-4 mb-0" th:if="${request.status != 'OPEN'}">
+                            This request is <strong th:text="${request.status}">CLAIMED</strong> and cannot be claimed.
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
+    </main>
 
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
 </body>
 </html>

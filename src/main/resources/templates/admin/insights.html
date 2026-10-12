@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('RapidTutor · Insights')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
+
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-page-header">
+                <div>
+                    <h1>Learning insights</h1>
+                    <p>Where requests cluster, whether sessions were rated, and whether a diagnostic note was saved.</p>
+                </div>
+            </div>
+
+            <div class="rt-stat-grid">
+                <div class="rt-stat"><span>Resolved sessions</span><strong th:text="${resolvedCount}">0</strong></div>
+                <div class="rt-stat"><span>Resolved with an AI note</span><strong th:text="${resolvedWithNoteCount}">0</strong></div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h2 class="h5 mb-3">Requests by course</h2>
+                    <div class="rt-card">
+                        <table class="table rt-table mb-0">
+                            <thead>
+                            <tr><th>Course</th><th>Requests</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:if="${#lists.isEmpty(courseCounts)}">
+                                <td colspan="2" class="rt-empty">No requests yet.</td>
+                            </tr>
+                            <tr th:each="row : ${courseCounts}">
+                                <td th:text="${row.label}">HCDD 412</td>
+                                <td th:text="${row.count}">1</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <h2 class="h5 mb-3">Requests by topic</h2>
+                    <div class="rt-card">
+                        <table class="table rt-table mb-0">
+                            <thead>
+                            <tr><th>Topic</th><th>Requests</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:if="${#lists.isEmpty(topicCounts)}">
+                                <td colspan="2" class="rt-empty">No requests yet.</td>
+                            </tr>
+                            <tr th:each="row : ${topicCounts}">
+                                <td th:text="${row.label}">UML</td>
+                                <td th:text="${row.count}">1</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <h2 class="h5 mb-3">Tutor ratings</h2>
+                    <div class="rt-card">
+                        <table class="table rt-table mb-0">
+                            <thead>
+                            <tr><th>Tutor</th><th>Average</th><th>Reviews</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:if="${#lists.isEmpty(tutorScores)}">
+                                <td colspan="3" class="rt-empty">No reviews yet.</td>
+                            </tr>
+                            <tr th:each="score : ${tutorScores}">
+                                <td th:text="${score.username}">tutor1</td>
+                                <td th:text="${#numbers.formatDecimal(score.averageScore, 1, 1)}">5.0</td>
+                                <td th:text="${score.reviewCount}">1</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
+</body>
+</html>

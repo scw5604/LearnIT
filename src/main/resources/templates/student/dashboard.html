@@ -15,6 +15,8 @@
                 <a th:href="@{/student/requests/new}" class="btn btn-rt-primary">Post request</a>
             </div>
 
+            <div th:replace="~{fragments/alerts :: alerts}"></div>
+
             <div class="rt-card">
                 <div class="table-responsive">
                     <table class="table rt-table mb-0">
@@ -24,6 +26,7 @@
                             <th>Course</th>
                             <th>Topic</th>
                             <th>Status</th>
+                            <th>Bounty</th>
                             <th>Effort</th>
                             <th>Meeting</th>
                             <th>Actions</th>
@@ -31,7 +34,7 @@
                         </thead>
                         <tbody>
                         <tr th:if="${#lists.isEmpty(requests)}">
-                            <td colspan="7" class="rt-empty">No requests yet. Post a blocker to get started.</td>
+                            <td colspan="8" class="rt-empty">No requests yet. Post a blocker to get started.</td>
                         </tr>
                         <tr th:each="req : ${requests}">
                             <td class="text-muted" th:text="${req.id}">1</td>
@@ -43,6 +46,7 @@
                                 <span class="rt-badge rt-badge-resolved" th:if="${req.status == 'RESOLVED'}">Resolved</span>
                                 <span class="rt-badge rt-badge-canceled" th:if="${req.status == 'CANCELED'}">Canceled</span>
                             </td>
+                            <td th:text="${req.bountyValue != null ? req.bountyValue : 0}">0</td>
                             <td th:text="${req.expectedEffort}">15 mins</td>
                             <td th:text="${req.preferredMeetingMethod}">Zoom</td>
                             <td>
@@ -54,7 +58,8 @@
                                     <form th:if="${req.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${req.id})}" method="post" class="m-0">
                                         <button type="submit" class="btn btn-sm btn-rt-ok">Mark resolved</button>
                                     </form>
-                                    <a th:if="${req.status == 'RESOLVED'}" th:href="@{/student/requests/{id}/review(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Leave review</a>
+                                    <a th:if="${req.status == 'RESOLVED' and !reviewedRequestIds.contains(req.id)}" th:href="@{/student/requests/{id}/review(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Leave review</a>
+                                    <span th:if="${req.status == 'RESOLVED' and reviewedRequestIds.contains(req.id)}" class="text-muted small">Reviewed</span>
                                     <span th:if="${req.status == 'CANCELED'}" class="text-muted small">Closed</span>
                                 </div>
                             </td>
