@@ -10,25 +10,40 @@
             <div class="rt-auth-wrap">
                 <div class="rt-panel">
                     <h1>Create a student account</h1>
-                    <p class="text-muted mb-4">New accounts start with 100 tokens.</p>
+                    <p class="text-muted mb-4">New student accounts start with 100 tokens. You will get a recovery code to save.</p>
 
-                    <div th:if="${param.error}" class="alert alert-danger" role="alert">
-                        That username is already taken. Choose another.
-                    </div>
+                    <div th:replace="~{fragments/alerts :: alerts}"></div>
 
-                    <form th:action="@{/register}" th:object="${user}" method="post">
+                    <form th:action="@{/register}" th:object="${accountForm}" method="post" accept-charset="UTF-8">
+                        <div class="mb-3">
+                            <label class="form-label" for="displayName">Name</label>
+                            <input id="displayName" type="text" class="form-control" th:field="*{displayName}" required maxlength="80">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="email">Email</label>
+                            <input id="email" type="email" class="form-control" th:field="*{email}" required maxlength="120" autocomplete="email">
+                        </div>
                         <div class="mb-3">
                             <label class="form-label" for="username">Username</label>
-                            <input id="username" type="text" class="form-control" th:field="*{username}" required placeholder="student2">
+                            <input id="username" type="text" class="form-control" th:field="*{username}" required minlength="3" maxlength="40" autocomplete="username" placeholder="student2">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="password">Password</label>
+                            <input id="password" type="password" class="form-control" th:field="*{password}" required minlength="10" autocomplete="new-password">
+                            <div class="form-text">At least 10 characters, and different from your username and email.</div>
                         </div>
                         <div class="mb-4">
-                            <label class="form-label" for="password">Password</label>
-                            <input id="password" type="password" class="form-control" th:field="*{password}" required>
+                            <label class="form-label" for="confirmPassword">Confirm password</label>
+                            <input id="confirmPassword" type="password" class="form-control" th:field="*{confirmPassword}" required minlength="10" autocomplete="new-password">
                         </div>
                         <button type="submit" class="btn btn-rt-primary w-100">Create account</button>
                     </form>
 
-                    <p class="text-center mt-4 mb-0">
+                    <p class="text-center mt-4 mb-1">
+                        <span class="text-muted">Want to tutor?</span>
+                        <a th:href="@{/apply/tutor}">Apply as a tutor</a>
+                    </p>
+                    <p class="text-center mb-0">
                         <span class="text-muted">Already registered?</span>
                         <a th:href="@{/login}">Sign in</a>
                     </p>

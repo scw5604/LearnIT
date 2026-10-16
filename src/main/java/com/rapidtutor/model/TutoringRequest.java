@@ -17,13 +17,13 @@ public class TutoringRequest {
     private String expectedEffort;
     private String preferredMeetingMethod;
     private String status;
-    private String tutorUsername;
-
 
     private LocalDateTime creationTimestamp;
     private LocalDateTime claimedTimestamp;
     private Long assignedTutorId;
     private LocalDateTime resolvedTimestamp;
+    private LocalDateTime canceledTimestamp;
+    private LocalDateTime offeredMeetingTime;
 
     @Version
     private Long version;
@@ -167,11 +167,19 @@ public class TutoringRequest {
         this.aiDiagnosticNote = aiDiagnosticNote;
     }
 
-    public String getTutorUsername() {
-        return tutorUsername;
+    public LocalDateTime getOfferedMeetingTime() {
+        return offeredMeetingTime;
     }
 
-    public void setTutorUsername(String tutorUsername) {
-        this.tutorUsername = tutorUsername;
+    public void setOfferedMeetingTime(LocalDateTime offeredMeetingTime) {
+        this.offeredMeetingTime = offeredMeetingTime;
+    }
+
+    public LocalDateTime getCanceledTimestamp() {
+        return canceledTimestamp;
+    }
+
+    public void setCanceledTimestamp(LocalDateTime canceledTimestamp) {
+        this.canceledTimestamp = canceledTimestamp;
     }
 }

@@ -150,7 +150,8 @@ body.rt-body {
     color: var(--rt-ok);
 }
 
-.rt-badge-canceled {
+.rt-badge-canceled,
+.rt-badge-expired {
     background: #f6eaea;
     color: var(--rt-danger);
 }

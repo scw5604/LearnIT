@@ -22,7 +22,8 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/h2-console/**", "/login", "/register", "/css/**").permitAll()
+                        .requestMatchers("/login", "/register", "/forgot-password", "/apply/tutor", "/css/**").permitAll()
+                        .requestMatchers("/h2-console/**").hasRole("ADMIN")
                         .requestMatchers("/student/**").hasRole("STUDENT")
                         .requestMatchers("/tutor/**").hasRole("TUTOR")
                         .requestMatchers("/admin/**").hasRole("ADMIN")
@@ -41,7 +42,16 @@ public class SecurityConfig {
                         .permitAll()
                 )
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**"))
-                .headers(headers -> headers.frameOptions(frame -> frame.disable())); // required for H2 console
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.disable())
+                        .addHeaderWriter((request, response) -> {
+                            String path = request.getRequestURI();
+                            if (path != null && path.startsWith("/h2-console")) {
+                                response.setHeader("X-Frame-Options", "SAMEORIGIN");
+                            } else {
+                                response.setHeader("X-Frame-Options", "DENY");
+                            }
+                        }));
 
         return http.build();
     }

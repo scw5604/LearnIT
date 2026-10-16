@@ -21,4 +21,11 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("SELECT r.tutorId, AVG(r.score), COUNT(r) FROM Review r GROUP BY r.tutorId")
     List<Object[]> summarizeByTutor();
+
+    @Query("SELECT r.score, COUNT(r) FROM Review r GROUP BY r.score")
+    List<Object[]> countByScore();
+
+    List<Review> findTop20ByOrderByCreatedAtDesc();
+
+    List<Review> findByTutorIdOrderByCreatedAtDesc(Long tutorId);
 }

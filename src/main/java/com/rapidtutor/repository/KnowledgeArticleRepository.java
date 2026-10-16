@@ -10,4 +10,6 @@ public interface KnowledgeArticleRepository extends JpaRepository<KnowledgeArtic
     List<KnowledgeArticle> findByCourseIgnoreCaseAndTopicContainingIgnoreCase(String course, String topic);
 
     long countByCourse(String course);
+
+    long countByCourseAndTopic(String course, String topic);
 }

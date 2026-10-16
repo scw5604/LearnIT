@@ -1,13 +1,19 @@
 package com.rapidtutor.controller;
 
+import com.rapidtutor.model.MeetingOffer;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
+import com.rapidtutor.repository.MeetingOfferRepository;
+import com.rapidtutor.repository.RequestEventRepository;
 import com.rapidtutor.repository.ReviewRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
+import com.rapidtutor.service.EconomyService;
+import com.rapidtutor.service.MeetingOfferService;
+import com.rapidtutor.service.NotificationService;
+import com.rapidtutor.service.RequestLifecycle;
 import com.rapidtutor.service.SubjectMatcher;
 import org.springframework.http.HttpStatus;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -15,8 +21,12 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
+import java.time.DateTimeException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 @RequestMapping("/tutor")
@@ -25,12 +35,27 @@ public class TutorController {
     private final TutoringRequestRepository requestRepository;
     private final UserRepository userRepository;
     private final ReviewRepository reviewRepository;
+    private final MeetingOfferRepository offerRepository;
+    private final MeetingOfferService meetingOfferService;
+    private final RequestEventRepository eventRepository;
+    private final EconomyService economyService;
+    private final RequestLifecycle requestLifecycle;
+    private final NotificationService notificationService;
 
     public TutorController(TutoringRequestRepository requestRepository, UserRepository userRepository,
-                           ReviewRepository reviewRepository) {
+                           ReviewRepository reviewRepository, MeetingOfferRepository offerRepository,
+                           MeetingOfferService meetingOfferService,
+                           RequestEventRepository eventRepository, EconomyService economyService,
+                           RequestLifecycle requestLifecycle, NotificationService notificationService) {
         this.requestRepository = requestRepository;
         this.userRepository = userRepository;
         this.reviewRepository = reviewRepository;
+        this.offerRepository = offerRepository;
+        this.meetingOfferService = meetingOfferService;
+        this.eventRepository = eventRepository;
+        this.economyService = economyService;
+        this.requestLifecycle = requestLifecycle;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/board")
@@ -44,41 +69,79 @@ public class TutorController {
                 .filter(req -> tutor.getId().equals(req.getAssignedTutorId()))
                 .toList();
 
+        Map<Long, List<MeetingOffer>> offersByRequest = new HashMap<>();
+        List<MeetingOffer> allOffers = new ArrayList<>();
+        for (TutoringRequest request : openRequests) {
+            List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(request.getId());
+            offersByRequest.put(request.getId(), offers);
+            allOffers.addAll(offers);
+        }
+
         model.addAttribute("requests", openRequests);
+        model.addAttribute("offersByRequest", offersByRequest);
+        model.addAttribute("tutorNamesById", publicNames(allOffers));
         model.addAttribute("myClaimedRequests", myClaimedRequests);
         model.addAttribute("tutorSubjects", tutor.getSubjects());
         model.addAttribute("myAverageScore", reviewRepository.getAverageScoreByTutorId(tutor.getId()));
+        model.addAttribute("myReviews", reviewRepository.findByTutorIdOrderByCreatedAtDesc(tutor.getId()));
         return "tutor/tutor-board";
     }
 
-    @PostMapping("/claim/{id}")
-    public String claimRequest(@PathVariable Long id, Principal principal, RedirectAttributes redirectAttributes) {
+    @PostMapping("/requests/{id}/offers")
+    public String offerTime(@PathVariable Long id, @RequestParam(required = false) String offeredTime,
+                            @RequestParam(defaultValue = "details") String from,
+                            Principal principal, RedirectAttributes redirectAttributes) {
         User tutor = requireTutor(principal);
-
-        try {
-            TutoringRequest request = requestRepository.findById(id).orElse(null);
-            if (request == null) {
-                redirectAttributes.addFlashAttribute("errorMessage", "That request does not exist.");
-                return "redirect:/tutor/board";
-            }
-            if (!SubjectMatcher.covers(tutor.getSubjects(), request.getCourse())) {
-                redirectAttributes.addFlashAttribute("errorMessage", "This request is outside your subjects.");
-                return "redirect:/tutor/board";
-            }
-            if (!"OPEN".equals(request.getStatus())) {
-                redirectAttributes.addFlashAttribute("errorMessage", "This request is no longer available.");
-                return "redirect:/tutor/board";
-            }
-
-            request.setStatus("CLAIMED");
-            request.setAssignedTutorId(tutor.getId());
-            request.setClaimedTimestamp(LocalDateTime.now());
-            requestRepository.save(request);
-            redirectAttributes.addFlashAttribute("successMessage", "You have successfully claimed the request!");
-        } catch (ObjectOptimisticLockingFailureException e) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Sorry, another tutor just claimed this request.");
+        String redirect = "board".equals(from) ? "redirect:/tutor/board" : "redirect:/tutor/requests/" + id;
+        LocalDateTime time = parseTime(offeredTime);
+        if (time == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Enter a meeting time.");
+            redirectAttributes.addFlashAttribute("timeError", true);
+            return redirect;
         }
+        try {
+            meetingOfferService.saveOffer(tutor, id, time);
+            redirectAttributes.addFlashAttribute("successMessage", "Time offered. The request stays open until the student accepts it.");
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            if (e.getMessage() != null && e.getMessage().toLowerCase().contains("time")) {
+                redirectAttributes.addFlashAttribute("timeError", true);
+            }
+            return redirect;
+        }
+        return redirect;
+    }
 
+    @PostMapping("/requests/{id}/offers/{offerId}/withdraw")
+    public String withdrawOffer(@PathVariable Long id, @PathVariable Long offerId, Principal principal,
+                                RedirectAttributes redirectAttributes) {
+        User tutor = requireTutor(principal);
+        try {
+            meetingOfferService.withdraw(tutor, id, offerId);
+            redirectAttributes.addFlashAttribute("successMessage", "Offer withdrawn.");
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+        return "redirect:/tutor/board";
+    }
+
+    @PostMapping("/requests/{id}/cancel")
+    public String cancelClaimed(@PathVariable Long id, Principal principal, RedirectAttributes redirectAttributes) {
+        User tutor = requireTutor(principal);
+        TutoringRequest request = requestRepository.findById(id).orElse(null);
+        if (request == null || !tutor.getId().equals(request.getAssignedTutorId())) {
+            redirectAttributes.addFlashAttribute("errorMessage", "You can only cancel a session assigned to you.");
+            return "redirect:/tutor/board";
+        }
+        try {
+            Long studentId = request.getStudentId();
+            economyService.cancelClaimed(id);
+            requestLifecycle.record(id, "CLAIMED", "CANCELED", tutor.getUsername());
+            notificationService.notify(studentId, tutor.getPublicName() + " canceled the session.", "/student/dashboard");
+            redirectAttributes.addFlashAttribute("successMessage", "Session canceled and the bounty was refunded.");
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
         return "redirect:/tutor/board";
     }
 
@@ -101,7 +164,43 @@ public class TutorController {
         }
 
         model.addAttribute("request", request);
+        model.addAttribute("tutorName", tutorDisplayName(request));
+        model.addAttribute("events", eventRepository.findByRequestIdOrderByAtAsc(request.getId()));
+        if ("OPEN".equals(request.getStatus())) {
+            List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(request.getId());
+            model.addAttribute("offers", offers);
+            model.addAttribute("tutorNamesById", publicNames(offers));
+        }
         return "tutor/request-details";
+    }
+
+    private String tutorDisplayName(TutoringRequest request) {
+        if (request.getAssignedTutorId() == null) {
+            return null;
+        }
+        return userRepository.findById(request.getAssignedTutorId()).map(User::getPublicName).orElse(null);
+    }
+
+    private Map<Long, String> publicNames(List<MeetingOffer> offers) {
+        Map<Long, String> names = new HashMap<>();
+        for (MeetingOffer offer : offers) {
+            if (offer.getTutorId() != null && !names.containsKey(offer.getTutorId())) {
+                userRepository.findById(offer.getTutorId())
+                        .ifPresent(user -> names.put(user.getId(), user.getPublicName()));
+            }
+        }
+        return names;
+    }
+
+    private LocalDateTime parseTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value);
+        } catch (DateTimeException e) {
+            return null;
+        }
     }
 
     private User requireTutor(Principal principal) {

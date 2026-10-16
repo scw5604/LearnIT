@@ -36,3 +36,6 @@ build/
 data/
 *.log
 *.trace.db
+
+### Local secrets ###
+application-local.properties

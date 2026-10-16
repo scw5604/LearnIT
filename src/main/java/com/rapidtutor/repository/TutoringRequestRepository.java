@@ -15,6 +15,8 @@ public interface TutoringRequestRepository extends JpaRepository<TutoringRequest
 
     long countByStatus(String status);
 
+    long countByStudentIdAndStatus(Long studentId, String status);
+
     @Query("SELECT r.course, COUNT(r) FROM TutoringRequest r GROUP BY r.course ORDER BY COUNT(r) DESC")
     List<Object[]> countGroupedByCourse();
 

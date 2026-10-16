@@ -39,12 +39,22 @@
                         <tr th:each="req : ${requests}">
                             <td class="text-muted" th:text="${req.id}">1</td>
                             <td th:text="${req.course}">HCDD 412</td>
-                            <td th:text="${req.topic}">Topic Name</td>
+                            <td>
+                                <div th:text="${req.topic}">Topic Name</div>
+                                <div class="text-muted small" th:if="${req.status == 'OPEN' and (req.aiDiagnosticNote == null or #strings.isEmpty(req.aiDiagnosticNote))}">Preparing note</div>
+                                <div class="text-muted small" th:if="${req.status == 'OPEN' and req.aiDiagnosticNote != null and !#strings.isEmpty(req.aiDiagnosticNote)}">Note ready</div>
+                                <div class="text-muted small" th:if="${req.status == 'OPEN'}" th:text="${(offerCounts.get(req.id) != null ? offerCounts.get(req.id) : 0) + ' time offers'}">0 time offers</div>
+                                <div class="text-muted small" th:if="${(req.status == 'CLAIMED' or req.status == 'RESOLVED') and tutorNames.get(req.id) != null}">
+                                    <span th:text="${tutorNames.get(req.id)}">tutor1</span>
+                                    <span th:if="${req.offeredMeetingTime != null}" th:text="${' · ' + req.preferredMeetingMethod + ' on ' + #temporals.format(req.offeredMeetingTime, 'MMM d, h:mm a')}"> · Zoom on Oct 14, 4:00 PM</span>
+                                </div>
+                            </td>
                             <td>
                                 <span class="rt-badge rt-badge-open" th:if="${req.status == 'OPEN'}">Open</span>
                                 <span class="rt-badge rt-badge-claimed" th:if="${req.status == 'CLAIMED'}">Claimed</span>
                                 <span class="rt-badge rt-badge-resolved" th:if="${req.status == 'RESOLVED'}">Resolved</span>
                                 <span class="rt-badge rt-badge-canceled" th:if="${req.status == 'CANCELED'}">Canceled</span>
+                                <span class="rt-badge rt-badge-expired" th:if="${req.status == 'EXPIRED'}">Expired</span>
                             </td>
                             <td th:text="${req.bountyValue != null ? req.bountyValue : 0}">0</td>
                             <td th:text="${req.expectedEffort}">15 mins</td>
@@ -52,7 +62,7 @@
                             <td>
                                 <div class="rt-actions">
                                     <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Details</a>
-                                    <form th:if="${req.status == 'OPEN'}" th:action="@{/student/requests/{id}/cancel(id=${req.id})}" method="post" class="m-0">
+                                    <form th:if="${req.status == 'OPEN' or req.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/cancel(id=${req.id})}" method="post" class="m-0">
                                         <button type="submit" class="btn btn-sm btn-rt-danger">Cancel</button>
                                     </form>
                                     <form th:if="${req.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${req.id})}" method="post" class="m-0">
@@ -60,7 +70,7 @@
                                     </form>
                                     <a th:if="${req.status == 'RESOLVED' and !reviewedRequestIds.contains(req.id)}" th:href="@{/student/requests/{id}/review(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Leave review</a>
                                     <span th:if="${req.status == 'RESOLVED' and reviewedRequestIds.contains(req.id)}" class="text-muted small">Reviewed</span>
-                                    <span th:if="${req.status == 'CANCELED'}" class="text-muted small">Closed</span>
+                                    <span th:if="${req.status == 'CANCELED' or req.status == 'EXPIRED'}" class="text-muted small">Closed</span>
                                 </div>
                             </td>
                         </tr>

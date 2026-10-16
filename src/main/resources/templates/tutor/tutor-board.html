@@ -36,7 +36,12 @@
                             <span class="rt-badge rt-badge-claimed">Claimed</span>
                             <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' tokens'}">0 tokens</span>
                         </div>
-                        <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Open workspace</a>
+                        <div class="rt-actions">
+                            <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Open workspace</a>
+                            <form class="m-0" th:action="@{/tutor/requests/{id}/cancel(id=${req.id})}" method="post">
+                                <button type="submit" class="btn btn-sm btn-rt-danger">Cancel session</button>
+                            </form>
+                        </div>
                     </article>
                 </div>
                 <div class="col-12" th:if="${#lists.isEmpty(myClaimedRequests)}">
@@ -57,18 +62,46 @@
                         <div class="rt-meta">
                             <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' token bounty'}">0 token bounty</span>
                             <span th:text="${req.preferredMeetingMethod}">Zoom</span>
+                            <span th:text="${req.desiredResponseTime}">Today</span>
                         </div>
-                        <div class="rt-actions">
-                            <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">View details</a>
-                            <form th:action="@{/tutor/claim/{id}(id=${req.id})}" method="post" class="m-0">
-                                <button type="submit" class="btn btn-sm btn-rt-ok">Claim request</button>
-                            </form>
-                        </div>
+                        <ul class="mt-3 mb-3" th:if="${offersByRequest.get(req.id) != null and !offersByRequest.get(req.id).isEmpty()}">
+                            <li th:each="offer : ${offersByRequest.get(req.id)}" class="d-flex justify-content-between align-items-center gap-2">
+                                <span>
+                                    <span th:text="${tutorNamesById.get(offer.tutorId)}">tutor1</span>
+                                    <span th:text="${#temporals.format(offer.offeredTime, 'MMM d, h:mm a')}">Oct 14, 4:00 PM</span>
+                                </span>
+                                <form th:if="${offer.tutorId == currentUser.id}" class="m-0"
+                                      th:action="@{/tutor/requests/{id}/offers/{offerId}/withdraw(id=${req.id}, offerId=${offer.id})}" method="post">
+                                    <button type="submit" class="btn btn-sm btn-rt-ghost">Withdraw</button>
+                                </form>
+                            </li>
+                        </ul>
+                        <form class="mt-3" th:action="@{/tutor/requests/{id}/offers(id=${req.id})}" method="post">
+                            <input type="hidden" name="from" value="board">
+                            <label class="form-label" th:for="${'time-' + req.id}">Offer a meeting time</label>
+                            <input class="form-control mb-2" type="datetime-local" name="offeredTime" required th:id="${'time-' + req.id}">
+                            <div class="rt-actions">
+                                <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">View details</a>
+                                <button type="submit" class="btn btn-sm btn-rt-ok">Offer time</button>
+                            </div>
+                        </form>
                     </article>
                 </div>
                 <div class="col-12" th:if="${#lists.isEmpty(requests)}">
                     <p class="text-muted">No open requests in your subjects.</p>
                 </div>
+            </div>
+
+            <h2 class="h5 mt-5 mb-3">Reviews</h2>
+            <div class="rt-card">
+                <p class="text-muted mb-0" th:if="${myReviews == null or #lists.isEmpty(myReviews)}">No reviews yet.</p>
+                <ul class="mb-0" th:if="${myReviews != null and !#lists.isEmpty(myReviews)}">
+                    <li th:each="review : ${myReviews}">
+                        <strong th:text="${review.score}">5</strong>
+                        <span th:text="${review.feedback != null ? review.feedback : 'No written feedback.'}">Helpful</span>
+                        <span class="text-muted" th:if="${review.createdAt != null}" th:text="${#temporals.format(review.createdAt, 'MMM d, yyyy')}">Oct 15, 2026</span>
+                    </li>
+                </ul>
             </div>
         </div>
     </main>

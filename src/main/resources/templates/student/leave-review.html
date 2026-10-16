@@ -22,18 +22,18 @@
 
                             <div class="mb-3">
                                 <label class="form-label" for="score">Understanding after the session</label>
-                                <select id="score" class="form-select" name="score" required>
-                                    <option value="5">5 — I understand the concept</option>
-                                    <option value="4">4 — I mostly understand</option>
-                                    <option value="3">3 — Somewhat helpful</option>
-                                    <option value="2">2 — I am still confused</option>
-                                    <option value="1">1 — The concept was not explained</option>
+                                <select id="score" class="form-select" name="score" required aria-describedby="score-error">
+                                    <option value="5" th:selected="${score == 5}">5 — I understand the concept</option>
+                                    <option value="4" th:selected="${score == 4}">4 — I mostly understand</option>
+                                    <option value="3" th:selected="${score == 3}">3 — Somewhat helpful</option>
+                                    <option value="2" th:selected="${score == 2}">2 — I am still confused</option>
+                                    <option value="1" th:selected="${score == 1}">1 — The concept was not explained</option>
                                 </select>
                             </div>
 
                             <div class="mb-4">
                                 <label class="form-label" for="feedback">Feedback</label>
-                                <textarea id="feedback" class="form-control" name="feedback" rows="3" placeholder="What did the tutor explain well?"></textarea>
+                                <textarea id="feedback" class="form-control" name="feedback" rows="3" placeholder="What did the tutor explain well?" th:text="${feedback}"></textarea>
                             </div>
 
                             <button type="submit" class="btn btn-rt-primary w-100">Submit review</button>

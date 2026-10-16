@@ -7,8 +7,12 @@ public final class Courses {
     public static final String HCDD_412 = "HCDD 412";
     public static final String IST_440W = "IST 440W";
     public static final String IST_311 = "IST 311";
+    public static final String HCDD_411 = "HCDD 411";
+    public static final String HCDD_331 = "HCDD 331";
+    public static final String IST_230 = "IST 230";
 
-    public static final List<String> OFFERED = List.of(HCDD_412, IST_440W, IST_311);
+    public static final List<String> OFFERED = List.of(
+            HCDD_412, IST_440W, IST_311, HCDD_411, HCDD_331, IST_230);
 
     private Courses() {
     }

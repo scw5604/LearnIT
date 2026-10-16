@@ -33,7 +33,7 @@ Diagnostic notes are optional. If `GROQ_API_KEY` is unset, diagnosis falls back 
   Username: `sa`  
   Password: (leave blank)
 
-Public registration creates **student** accounts only. Use the seeded tutor account below to claim requests.
+Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. A session is claimed when the student accepts that time. Seeded `tutor1` can offer times immediately.
 
 ## Default test accounts
 
@@ -43,9 +43,9 @@ Passwords are stored with BCrypt. If you already have a `data/` folder from an o
 
 | Role | Username | Password | Use |
 |---|---|---|---|
-| Student | `student1` | `password` | Post requests, cancel, resolve, review |
-| Tutor | `tutor1` | `password` | Board for HCDD 412 and IST 440W |
-| Admin | `admin` | `password` | Overview and learning insights |
+| Student | `student1` | `password` | Post requests, accept a time, cancel, resolve, review |
+| Tutor | `tutor1` | `password` | Offer times for HCDD 412, IST 440W, IST 311, HCDD 411, HCDD 331, and IST 230 |
+| Admin | `admin` | `password` | Approve tutors, overview, and learning insights |
 
 ## Architecture and database notes
 

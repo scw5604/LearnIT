@@ -14,6 +14,8 @@
                         <p class="rt-kicker" th:text="${request.course}">Course</p>
                         <h1 th:text="${request.topic}">Topic</h1>
 
+                        <div th:replace="~{fragments/alerts :: alerts}"></div>
+
                         <div class="rt-meta">
                             <span>Bounty: <strong th:text="${request.bountyValue != null ? request.bountyValue : 0}">0</strong> tokens</span>
                             <span th:text="${request.expectedEffort}">30 mins</span>
@@ -24,18 +26,59 @@
                         <p class="rt-kicker">Student's description</p>
                         <p th:text="${request.shortDescription}">Problem details</p>
 
+                        <p class="mt-4" th:if="${request.status == 'CLAIMED' or request.status == 'RESOLVED'}">
+                            Claimed by <strong th:text="${tutorName}">tutor1</strong>.
+                            <span th:text="${request.preferredMeetingMethod}">Zoom</span><span th:if="${request.offeredMeetingTime != null}" th:text="${' on ' + #temporals.format(request.offeredMeetingTime, 'MMM d, h:mm a')}"> on Oct 14, 4:00 PM</span>.
+                        </p>
+
                         <div class="rt-suggestion mt-4" th:if="${request.aiDiagnosticNote != null and !#strings.isEmpty(request.aiDiagnosticNote)}">
                             <h3>AI lesson scaffold</h3>
                             <p>Use these questions to guide the student. Do not hand over the final answer.</p>
                             <p class="rt-note" th:text="${request.aiDiagnosticNote}">Diagnostic note</p>
                         </div>
 
-                        <form class="mt-4" th:if="${request.status == 'OPEN'}" th:action="@{/tutor/claim/{id}(id=${request.id})}" method="post">
-                            <button type="submit" class="btn btn-rt-ok w-100">Claim this request</button>
-                        </form>
-                        <p class="text-muted mt-4 mb-0" th:if="${request.status != 'OPEN'}">
-                            This request is <strong th:text="${request.status}">CLAIMED</strong> and cannot be claimed.
-                        </p>
+                        <div class="mt-4" th:if="${request.status == 'OPEN'}">
+                            <h3 class="h5">Time offers</h3>
+                            <p class="text-muted" th:if="${offers == null or #lists.isEmpty(offers)}">No tutors have offered a time yet.</p>
+                            <ul th:if="${offers != null and !#lists.isEmpty(offers)}">
+                                <li th:each="offer : ${offers}" class="d-flex justify-content-between align-items-center gap-2">
+                                    <span>
+                                        <span th:text="${tutorNamesById.get(offer.tutorId)}">tutor1</span>
+                                        <span th:text="${#temporals.format(offer.offeredTime, 'MMM d, h:mm a')}">Oct 14, 4:00 PM</span>
+                                    </span>
+                                    <form th:if="${currentUser != null and offer.tutorId == currentUser.id}" class="m-0"
+                                          th:action="@{/tutor/requests/{id}/offers/{offerId}/withdraw(id=${request.id}, offerId=${offer.id})}" method="post">
+                                        <button type="submit" class="btn btn-sm btn-rt-ghost">Withdraw</button>
+                                    </form>
+                                </li>
+                            </ul>
+                            <form class="mt-3" th:action="@{/tutor/requests/{id}/offers(id=${request.id})}" method="post">
+                                <input type="hidden" name="from" value="details">
+                                <label class="form-label" for="offeredTime">Offer a meeting time</label>
+                                <input id="offeredTime" name="offeredTime" type="datetime-local" required
+                                       th:classappend="${timeError} ? 'form-control mb-1 is-invalid' : 'form-control mb-3'"
+                                       th:attr="aria-invalid=${timeError} ? 'true' : 'false', aria-describedby=${timeError} ? 'time-error' : null">
+                                <div th:if="${timeError}" id="time-error" class="invalid-feedback d-block mb-3" th:text="${errorMessage}">Choose a future time.</div>
+                                <button type="submit" class="btn btn-rt-ok w-100">Offer time</button>
+                            </form>
+                        </div>
+
+                        <div class="mt-4" th:if="${request.status == 'CLAIMED' and currentUser != null and request.assignedTutorId == currentUser.id}">
+                            <form th:action="@{/tutor/requests/{id}/cancel(id=${request.id})}" method="post">
+                                <button type="submit" class="btn btn-rt-danger">Cancel session</button>
+                            </form>
+                        </div>
+
+                        <div class="mt-4" th:if="${events != null and !#lists.isEmpty(events)}">
+                            <h3 class="h5">History</h3>
+                            <ul class="mb-0">
+                                <li th:each="event : ${events}">
+                                    <span th:text="${#temporals.format(event.at, 'MMM d, h:mm a')}">Oct 15, 4:00 PM</span>
+                                    <span th:text="${event.actorUsername}">tutor1</span>
+                                    <span th:text="${event.summary}">claimed the request</span>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('RapidTutor · Notifications')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
+
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-page-header">
+                <div>
+                    <h1>Notifications</h1>
+                    <p>Offers, acceptances, cancellations, and meeting-time changes.</p>
+                </div>
+            </div>
+
+            <div class="rt-card">
+                <div class="table-responsive">
+                    <table class="table rt-table mb-0">
+                        <thead>
+                        <tr>
+                            <th>When</th>
+                            <th>Message</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:if="${#lists.isEmpty(notifications)}">
+                            <td colspan="3" class="rt-empty">No notifications yet.</td>
+                        </tr>
+                        <tr th:each="note : ${notifications}">
+                            <td class="text-muted" th:text="${#temporals.format(note.createdAt, 'MMM d, h:mm a')}">Oct 15</td>
+                            <td>
+                                <a th:if="${note.link != null}" th:href="${note.link}" th:text="${note.message}">Update</a>
+                                <span th:if="${note.link == null}" th:text="${note.message}">Update</span>
+                                <span class="text-muted small" th:if="${note.readAt == null}">Unread</span>
+                            </td>
+                            <td>
+                                <form th:if="${note.readAt == null}" th:action="@{/notifications/{id}/read(id=${note.id})}" method="post" class="m-0">
+                                    <button type="submit" class="btn btn-sm btn-rt-ghost">Mark read</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
+</body>
+</html>

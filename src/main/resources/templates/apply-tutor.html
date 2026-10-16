@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('RapidTutor · Apply as a tutor')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
+
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-auth-wrap">
+                <div class="rt-panel">
+                    <h1>Apply as a tutor</h1>
+                    <p class="text-muted mb-4">An administrator approves your courses before you can offer meeting times. A session is claimed when a student accepts your time. Tutor accounts start with 0 tokens.</p>
+
+                    <div th:replace="~{fragments/alerts :: alerts}"></div>
+
+                    <form th:action="@{/apply/tutor}" th:object="${accountForm}" method="post" accept-charset="UTF-8">
+                        <div class="mb-3">
+                            <label class="form-label" for="displayName">Name</label>
+                            <input id="displayName" type="text" class="form-control" th:field="*{displayName}" required maxlength="80">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="email">Email</label>
+                            <input id="email" type="email" class="form-control" th:field="*{email}" required maxlength="120" autocomplete="email">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="username">Username</label>
+                            <input id="username" type="text" class="form-control" th:field="*{username}" required minlength="3" maxlength="40" autocomplete="username">
+                        </div>
+                        <fieldset class="mb-3">
+                            <legend class="form-label">Courses you can tutor</legend>
+                            <div class="form-check" th:each="course : ${courses}">
+                                <input class="form-check-input" type="checkbox" name="courses" th:value="${course}"
+                                       th:id="${'course-' + #strings.replace(course, ' ', '-')}"
+                                       th:checked="${accountForm.courses != null and accountForm.courses.contains(course)}">
+                                <label class="form-check-label" th:for="${'course-' + #strings.replace(course, ' ', '-')}" th:text="${course}">HCDD 412</label>
+                            </div>
+                        </fieldset>
+                        <div class="mb-3">
+                            <label class="form-label" for="password">Password</label>
+                            <input id="password" type="password" class="form-control" th:field="*{password}" required minlength="10" autocomplete="new-password">
+                            <div class="form-text">At least 10 characters, and different from your username and email.</div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label" for="confirmPassword">Confirm password</label>
+                            <input id="confirmPassword" type="password" class="form-control" th:field="*{confirmPassword}" required minlength="10" autocomplete="new-password">
+                        </div>
+                        <button type="submit" class="btn btn-rt-primary w-100">Submit application</button>
+                    </form>
+
+                    <p class="text-center mt-4 mb-0">
+                        <span class="text-muted">Need a student account?</span>
+                        <a th:href="@{/register}">Create one</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
+</body>
+</html>

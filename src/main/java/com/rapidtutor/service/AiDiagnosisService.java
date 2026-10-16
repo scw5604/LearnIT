@@ -15,7 +15,13 @@ import java.util.Map;
 public class AiDiagnosisService {
 
     private static final Logger log = LoggerFactory.getLogger(AiDiagnosisService.class);
-    private static final String FALLBACK = "AI Diagnosis temporarily unavailable. Proceeding with standard human review.";
+    private static final String SYSTEM_PROMPT = """
+            You prepare a student for a peer tutoring session. Reply with exactly three labeled parts:
+            Core concept: ...
+            Diagnostic question: ...
+            Starting step: ...
+            Explain the idea, ask one question, and give a first step. Do not give the final answer, a worked solution, or code that completes the assignment.
+            """;
 
     private final RestClient restClient;
     private final TutoringRequestRepository repository;
@@ -34,20 +40,19 @@ public class AiDiagnosisService {
     @Async
     public void generateDiagnosticScaffold(Long requestId, String course, String topic, String description) {
         if (apiKey == null || apiKey.isBlank() || "mock-key".equals(apiKey)) {
-            saveDiagnosis(requestId, offlineNote(topic));
+            saveDiagnosis(requestId, SocraticNotes.offline(topic));
             return;
         }
 
-        String prompt = String.format(
-                "Act as an academic peer tutor. For course: %s, topic: %s, description: %s. " +
-                        "Provide a 3-bullet response: 1) Underlying Core Concept, 2) Diagnostic Question to Ask, 3) Suggested Starting Step. Do NOT write code or provide the final answer.",
-                course, topic, description
-        );
+        String studentRequest = SocraticNotes.userMessage(course, topic, description);
 
         try {
             Map<String, Object> requestBody = Map.of(
                     "model", model,
-                    "messages", List.of(Map.of("role", "user", "content", prompt))
+                    "messages", List.of(
+                            Map.of("role", "system", "content", SYSTEM_PROMPT),
+                            Map.of("role", "user", "content", studentRequest)
+                    )
             );
 
             Map<?, ?> response = restClient.post()
@@ -59,15 +64,11 @@ public class AiDiagnosisService {
                     .body(Map.class);
 
             String result = GroqResponseParser.extractMessageContent(response);
-            saveDiagnosis(requestId, result != null ? result : FALLBACK);
+            saveDiagnosis(requestId, DiagnosticNoteChecker.accepts(result) ? result : SocraticNotes.offline(topic));
         } catch (Exception e) {
             log.warn("AI diagnosis failed: {}", e.getMessage());
-            saveDiagnosis(requestId, FALLBACK);
+            saveDiagnosis(requestId, SocraticNotes.offline(topic));
         }
-    }
-
-    private String offlineNote(String topic) {
-        return "Diagnostic Note (Offline Demo): Verify student environment and check baseline syntax for " + topic + ".";
     }
 
     private void saveDiagnosis(Long requestId, String text) {

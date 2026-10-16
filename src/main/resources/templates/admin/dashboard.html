@@ -20,13 +20,52 @@
                 <div class="rt-stat"><span>Claimed</span><strong th:text="${claimedCount}">0</strong></div>
                 <div class="rt-stat"><span>Resolved</span><strong th:text="${resolvedCount}">0</strong></div>
                 <div class="rt-stat"><span>Canceled</span><strong th:text="${canceledCount}">0</strong></div>
+                <div class="rt-stat"><span>Expired</span><strong th:text="${expiredCount}">0</strong></div>
             </div>
 
-            <div class="rt-card">
+            <div th:replace="~{fragments/alerts :: alerts}"></div>
+
+            <h2 class="h5 mb-3">Tutor applications</h2>
+            <div class="rt-card mb-4">
+                <p class="text-muted mb-0" th:if="${#lists.isEmpty(applicants)}">No tutor applications.</p>
+                <div class="table-responsive" th:if="${!#lists.isEmpty(applicants)}">
+                    <table class="table rt-table mb-0">
+                        <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Courses</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="applicant : ${applicants}">
+                            <td th:text="${applicant.publicName}">Ada</td>
+                            <td th:text="${applicant.username}">ada</td>
+                            <td th:text="${applicant.appliedSubjects}">HCDD 412</td>
+                            <td>
+                                <div class="rt-actions">
+                                    <form th:action="@{/admin/applicants/{id}/approve(id=${applicant.id})}" method="post" class="m-0">
+                                        <button type="submit" class="btn btn-sm btn-rt-ok">Approve</button>
+                                    </form>
+                                    <form th:action="@{/admin/applicants/{id}/decline(id=${applicant.id})}" method="post" class="m-0">
+                                        <button type="submit" class="btn btn-sm btn-rt-danger">Decline</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h2 class="h5 mb-3">Accounts</h2>
+            <div class="rt-card mb-4">
                 <div class="table-responsive">
                     <table class="table rt-table mb-0">
                         <thead>
                         <tr>
+                            <th>Name</th>
                             <th>Username</th>
                             <th>Role</th>
                             <th>Subjects</th>
@@ -35,6 +74,7 @@
                         </thead>
                         <tbody>
                         <tr th:each="user : ${users}">
+                            <td th:text="${user.publicName}">Student</td>
                             <td th:text="${user.username}">student1</td>
                             <td th:text="${user.role}">STUDENT</td>
                             <td th:text="${user.subjects != null ? user.subjects : '—'}">—</td>
@@ -43,6 +83,36 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <h2 class="h5 mb-3">Add an administrator</h2>
+            <div class="rt-card">
+                <p class="text-muted">The new administrator must set a new password on first sign-in. There is no public admin registration.</p>
+                <form th:action="@{/admin/administrators}" th:object="${accountForm}" method="post" accept-charset="UTF-8" class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="adminName">Name</label>
+                        <input id="adminName" class="form-control" th:field="*{displayName}" required maxlength="80">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="adminEmail">Email</label>
+                        <input id="adminEmail" type="email" class="form-control" th:field="*{email}" required maxlength="120">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="adminUsername">Username</label>
+                        <input id="adminUsername" class="form-control" th:field="*{username}" required minlength="3" maxlength="40">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="adminPassword">Temporary password</label>
+                        <input id="adminPassword" type="password" class="form-control" th:field="*{password}" required minlength="10" autocomplete="new-password">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="adminConfirm">Confirm password</label>
+                        <input id="adminConfirm" type="password" class="form-control" th:field="*{confirmPassword}" required minlength="10" autocomplete="new-password">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-rt-primary">Create administrator</button>
+                    </div>
+                </form>
             </div>
         </div>
     </main>

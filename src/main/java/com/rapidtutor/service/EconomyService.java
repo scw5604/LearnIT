@@ -37,6 +37,9 @@ public class EconomyService {
         if (currentBalance < offeredBounty) {
             throw new IllegalStateException("Insufficient token balance to post this bounty.");
         }
+        if (requestRepository.countByStudentIdAndStatus(student.getId(), "OPEN") >= 3) {
+            throw new IllegalStateException("You already have 3 open requests.");
+        }
 
         student.setTokenBalance(currentBalance - offeredBounty);
         userRepository.save(student);
@@ -46,8 +49,9 @@ public class EconomyService {
         request.setAssignedTutorId(null);
         request.setClaimedTimestamp(null);
         request.setResolvedTimestamp(null);
+        request.setCanceledTimestamp(null);
+        request.setOfferedMeetingTime(null);
         request.setAiDiagnosticNote(null);
-        request.setTutorUsername(null);
         request.setStatus("OPEN");
         return requestRepository.save(request);
     }
@@ -88,15 +92,46 @@ public class EconomyService {
             throw new IllegalStateException("Only open requests can be canceled.");
         }
 
+        refundStudent(request);
+
+        request.setStatus("CANCELED");
+        request.setCanceledTimestamp(LocalDateTime.now());
+        requestRepository.save(request);
+    }
+
+    /** Refunds the bounty when a claimed session ends before it is resolved. */
+    @Transactional
+    public void cancelClaimed(Long requestId) {
+        TutoringRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found."));
+        if (!"CLAIMED".equals(request.getStatus())) {
+            throw new IllegalStateException("Only a claimed session can be canceled this way.");
+        }
+        refundStudent(request);
+        request.setStatus("CANCELED");
+        request.setCanceledTimestamp(LocalDateTime.now());
+        requestRepository.save(request);
+    }
+
+    /** Refunds the bounty and closes an open request that outlived its response time. */
+    @Transactional
+    public void expireAndRefund(Long requestId) {
+        TutoringRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found."));
+        if (!"OPEN".equals(request.getStatus())) {
+            throw new IllegalStateException("Only open requests can expire.");
+        }
+        refundStudent(request);
+        request.setStatus("EXPIRED");
+        requestRepository.save(request);
+    }
+
+    private void refundStudent(TutoringRequest request) {
         User student = userRepository.findById(request.getStudentId())
                 .orElseThrow(() -> new IllegalArgumentException("Student not found."));
-
         int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
         int bounty = request.getBountyValue() != null ? request.getBountyValue() : 0;
         student.setTokenBalance(currentBalance + bounty);
         userRepository.save(student);
-
-        request.setStatus("CANCELED");
-        requestRepository.save(request);
     }
 }

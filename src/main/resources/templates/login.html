@@ -18,8 +18,8 @@
                     <div th:if="${param.logout}" class="alert alert-info" role="alert">
                         You have been signed out.
                     </div>
-                    <div th:if="${param.registered}" class="alert alert-success" role="alert">
-                        Account created. Sign in to continue.
+                    <div th:if="${param.reset}" class="alert alert-success" role="alert">
+                        Password updated. Sign in with the new password.
                     </div>
 
                     <form th:action="@{/login}" method="post">
@@ -34,9 +34,15 @@
                         <button type="submit" class="btn btn-rt-primary w-100">Sign in</button>
                     </form>
 
-                    <p class="text-center mt-4 mb-0">
+                    <p class="text-center mt-4 mb-1">
                         <span class="text-muted">Need a student account?</span>
                         <a th:href="@{/register}">Create one</a>
+                    </p>
+                    <p class="text-center mb-1">
+                        <a th:href="@{/apply/tutor}">Apply as a tutor</a>
+                    </p>
+                    <p class="text-center mb-0">
+                        <a th:href="@{/forgot-password}">Forgot password</a>
                     </p>
                 </div>
             </div>

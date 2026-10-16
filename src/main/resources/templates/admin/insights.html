@@ -59,6 +59,43 @@
                     </div>
                 </div>
                 <div class="col-12">
+                    <h2 class="h5 mb-3">Score counts</h2>
+                    <div class="rt-card">
+                        <table class="table rt-table mb-0">
+                            <thead>
+                            <tr><th>Score</th><th>Reviews</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="row : ${scoreCounts}">
+                                <td th:text="${row.score}">5</td>
+                                <td th:text="${row.count}">0</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <h2 class="h5 mb-3">Recent reviews</h2>
+                    <div class="rt-card">
+                        <table class="table rt-table mb-0">
+                            <thead>
+                            <tr><th>Tutor</th><th>Score</th><th>Feedback</th><th>Date</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:if="${#lists.isEmpty(recentReviews)}">
+                                <td colspan="4" class="rt-empty">No reviews yet.</td>
+                            </tr>
+                            <tr th:each="review : ${recentReviews}">
+                                <td th:text="${review.tutorName}">tutor1</td>
+                                <td th:text="${review.score}">5</td>
+                                <td th:text="${review.feedback != null ? review.feedback : '—'}">Helpful</td>
+                                <td th:text="${review.createdAt != null ? #temporals.format(review.createdAt, 'MMM d, yyyy') : '—'}">Oct 15, 2026</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-12">
                     <h2 class="h5 mb-3">Tutor ratings</h2>
                     <div class="rt-card">
                         <table class="table rt-table mb-0">

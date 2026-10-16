@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('RapidTutor · Recovery code')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
+
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-auth-wrap">
+                <div class="rt-panel">
+                    <h1>Save your recovery code</h1>
+                    <p>This code is shown once. You will need it, with your email, if you forget your password.</p>
+                    <p class="rt-kicker" th:text="${username}">student2</p>
+                    <p><code id="recovery-code" th:text="${recoveryCode}">CODE</code></p>
+                    <p class="mb-0"><a class="btn btn-rt-primary" th:href="@{/login}">Continue to sign in</a></p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
+</body>
+</html>

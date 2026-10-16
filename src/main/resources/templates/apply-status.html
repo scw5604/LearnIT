@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('RapidTutor · Application')}"></head>
+<body class="rt-body">
+<div class="rt-shell">
+    <div th:replace="~{fragments/app-nav :: navbar}"></div>
+
+    <main class="rt-main">
+        <div class="container">
+            <div class="rt-auth-wrap">
+                <div class="rt-panel">
+                    <h1>Tutor application</h1>
+                    <p th:if="${applicant != null and applicant.role == 'APPLICANT'}">
+                        Your application is waiting for an administrator. Courses:
+                        <span th:text="${applicant.appliedSubjects}">HCDD 412</span>.
+                    </p>
+                    <p th:if="${applicant != null and applicant.role == 'DECLINED'}">
+                        Your tutor application was declined.
+                    </p>
+                    <p th:if="${applicant != null and applicant.role == 'TUTOR'}">
+                        You are approved.
+                        <a th:href="@{/tutor/board}">Open the tutor board</a>.
+                    </p>
+                    <p class="mb-0" th:if="${applicant == null}">Sign in to see your application.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
+</body>
+</html>

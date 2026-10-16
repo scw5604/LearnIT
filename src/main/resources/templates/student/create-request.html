@@ -18,7 +18,7 @@
 
                         <div th:replace="~{fragments/alerts :: alerts}"></div>
 
-                        <form th:action="@{/student/requests}" th:object="${tutoringRequest}" method="post">
+                        <form th:action="@{/student/requests}" th:object="${tutoringRequest}" method="post" accept-charset="UTF-8">
                             <div class="mb-3">
                                 <label class="form-label" for="courseInput">Course</label>
                                 <select class="form-select" th:field="*{course}" id="courseInput" required>

@@ -1,15 +1,23 @@
 package com.rapidtutor.controller;
 
 import com.rapidtutor.model.Courses;
+import com.rapidtutor.model.MeetingOffer;
 import com.rapidtutor.model.Review;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
+import com.rapidtutor.repository.MeetingOfferRepository;
+import com.rapidtutor.repository.RequestEventRepository;
 import com.rapidtutor.repository.ReviewRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.AiDiagnosisService;
 import com.rapidtutor.service.EconomyService;
+import com.rapidtutor.service.MeetingOfferService;
+import com.rapidtutor.service.NotificationService;
+import com.rapidtutor.service.RequestFields;
+import com.rapidtutor.service.RequestLifecycle;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +25,9 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Controller
@@ -29,15 +39,28 @@ public class StudentController {
     private final ReviewRepository reviewRepository;
     private final AiDiagnosisService aiDiagnosisService;
     private final UserRepository userRepository;
+    private final MeetingOfferRepository offerRepository;
+    private final MeetingOfferService meetingOfferService;
+    private final RequestLifecycle requestLifecycle;
+    private final RequestEventRepository eventRepository;
+    private final NotificationService notificationService;
 
     public StudentController(EconomyService economyService, TutoringRequestRepository requestRepository,
                              ReviewRepository reviewRepository, AiDiagnosisService aiDiagnosisService,
-                             UserRepository userRepository) {
+                             UserRepository userRepository, MeetingOfferRepository offerRepository,
+                             MeetingOfferService meetingOfferService,
+                             RequestLifecycle requestLifecycle, RequestEventRepository eventRepository,
+                             NotificationService notificationService) {
         this.economyService = economyService;
         this.requestRepository = requestRepository;
         this.reviewRepository = reviewRepository;
         this.aiDiagnosisService = aiDiagnosisService;
         this.userRepository = userRepository;
+        this.offerRepository = offerRepository;
+        this.meetingOfferService = meetingOfferService;
+        this.requestLifecycle = requestLifecycle;
+        this.eventRepository = eventRepository;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/requests/new")
@@ -50,20 +73,21 @@ public class StudentController {
     }
 
     @PostMapping("/requests")
-    public String submitRequest(@ModelAttribute TutoringRequest request, Principal principal,
-                                RedirectAttributes redirectAttributes) {
+    public String submitRequest(@RequestParam(required = false) String course,
+                                @RequestParam(required = false) String topic,
+                                @RequestParam(required = false) String shortDescription,
+                                @RequestParam(required = false) String preferredMeetingMethod,
+                                @RequestParam(required = false) String desiredResponseTime,
+                                @RequestParam(required = false) String expectedEffort,
+                                @RequestParam(required = false) Integer bountyValue,
+                                Principal principal, Model model) {
         User student = requireStudent(principal);
-        String course = Courses.canonical(request.getCourse());
-        if (course == null) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Choose one of the listed courses.");
-            return "redirect:/student/requests/new";
-        }
-        request.setCourse(course);
-
-        int offeredBounty = request.getBountyValue() != null ? request.getBountyValue() : 0;
-
         try {
-            TutoringRequest savedRequest = economyService.createRequestWithBounty(student.getUsername(), request, offeredBounty);
+            TutoringRequest request = RequestFields.copy(course, topic, shortDescription, preferredMeetingMethod,
+                    desiredResponseTime, expectedEffort, bountyValue);
+            TutoringRequest savedRequest = economyService.createRequestWithBounty(
+                    student.getUsername(), request, request.getBountyValue());
+            requestLifecycle.record(savedRequest.getId(), null, "OPEN", student.getUsername());
             aiDiagnosisService.generateDiagnosticScaffold(
                     savedRequest.getId(),
                     savedRequest.getCourse(),
@@ -72,15 +96,29 @@ public class StudentController {
             );
             return "redirect:/student/dashboard";
         } catch (IllegalStateException | IllegalArgumentException e) {
-            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
-            return "redirect:/student/requests/new";
+            model.addAttribute("errorMessage", e.getMessage());
+            model.addAttribute("tutoringRequest", draftRequest(course, topic, shortDescription,
+                    preferredMeetingMethod, desiredResponseTime, expectedEffort, bountyValue));
+            model.addAttribute("courses", Courses.OFFERED);
+            return "student/create-request";
         }
     }
 
     @GetMapping("/dashboard")
     public String showDashboard(Model model, Principal principal) {
         User student = requireStudent(principal);
-        model.addAttribute("requests", requestRepository.findByStudentId(student.getId()));
+        List<TutoringRequest> requests = requestRepository.findByStudentId(student.getId());
+        Map<Long, Long> offerCounts = new HashMap<>();
+        Map<Long, String> tutorNames = new HashMap<>();
+        for (TutoringRequest request : requests) {
+            if ("OPEN".equals(request.getStatus())) {
+                offerCounts.put(request.getId(), offerRepository.countByRequestId(request.getId()));
+            }
+            tutorNames.put(request.getId(), tutorDisplayName(request));
+        }
+        model.addAttribute("requests", requests);
+        model.addAttribute("offerCounts", offerCounts);
+        model.addAttribute("tutorNames", tutorNames);
         List<Long> reviewedRequestIds = reviewRepository.findByStudentId(student.getId()).stream()
                 .map(Review::getRequestId)
                 .filter(Objects::nonNull)
@@ -96,16 +134,30 @@ public class StudentController {
         if (request == null) {
             return "redirect:/student/dashboard";
         }
-        if (!"OPEN".equals(request.getStatus())) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Only open requests can be canceled.");
+        if ("OPEN".equals(request.getStatus())) {
+            try {
+                economyService.cancelAndRefund(id);
+                meetingOfferService.deleteOffers(id);
+                requestLifecycle.record(id, "OPEN", "CANCELED", student.getUsername());
+                redirectAttributes.addFlashAttribute("successMessage", "Request canceled and the bounty was refunded.");
+            } catch (IllegalStateException | IllegalArgumentException e) {
+                redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            }
             return "redirect:/student/dashboard";
         }
-        try {
-            economyService.cancelAndRefund(id);
-            redirectAttributes.addFlashAttribute("successMessage", "Request canceled and the bounty was refunded.");
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        if ("CLAIMED".equals(request.getStatus())) {
+            Long tutorId = request.getAssignedTutorId();
+            try {
+                economyService.cancelClaimed(id);
+                requestLifecycle.record(id, "CLAIMED", "CANCELED", student.getUsername());
+                notificationService.notify(tutorId, student.getPublicName() + " canceled the session.", "/tutor/board");
+                redirectAttributes.addFlashAttribute("successMessage", "Session canceled and the bounty was refunded.");
+            } catch (IllegalStateException | IllegalArgumentException e) {
+                redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            }
+            return "redirect:/student/dashboard";
         }
+        redirectAttributes.addFlashAttribute("errorMessage", "Only an open or claimed session can be canceled.");
         return "redirect:/student/dashboard";
     }
 
@@ -122,6 +174,7 @@ public class StudentController {
         }
         try {
             economyService.resolveAndPayout(id, request.getAssignedTutorId());
+            requestLifecycle.record(id, "CLAIMED", "RESOLVED", student.getUsername());
             redirectAttributes.addFlashAttribute("successMessage", "Session marked resolved. The bounty was paid to your tutor.");
             return "redirect:/student/requests/" + id + "/review";
         } catch (IllegalStateException | IllegalArgumentException e) {
@@ -155,6 +208,7 @@ public class StudentController {
                                @RequestParam Integer score,
                                @RequestParam(required = false) String feedback,
                                Principal principal,
+                               Model model,
                                RedirectAttributes redirectAttributes) {
         User student = requireStudent(principal);
         TutoringRequest request = ownedRequest(requestId, student, redirectAttributes);
@@ -170,8 +224,11 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         if (score == null || score < 1 || score > 5) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Score must be between 1 and 5.");
-            return "redirect:/student/requests/" + requestId + "/review";
+            model.addAttribute("request", request);
+            model.addAttribute("score", score);
+            model.addAttribute("feedback", feedback);
+            model.addAttribute("errorMessage", "Score must be between 1 and 5.");
+            return "student/leave-review";
         }
 
         Review review = new Review();
@@ -194,7 +251,60 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         model.addAttribute("request", request);
+        model.addAttribute("tutorName", tutorDisplayName(request));
+        model.addAttribute("events", eventRepository.findByRequestIdOrderByAtAsc(request.getId()));
+        if ("OPEN".equals(request.getStatus())) {
+            List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(request.getId());
+            model.addAttribute("offers", offers);
+            model.addAttribute("tutorNamesById", publicNames(offers));
+        }
         return "student/request-details";
+    }
+
+    @PostMapping("/requests/{id}/offers/{offerId}/accept")
+    public String acceptOffer(@PathVariable Long id, @PathVariable Long offerId, Principal principal,
+                              RedirectAttributes redirectAttributes) {
+        User student = requireStudent(principal);
+        try {
+            meetingOfferService.accept(student, id, offerId);
+            redirectAttributes.addFlashAttribute("successMessage", "Time accepted. The session is claimed.");
+        } catch (ObjectOptimisticLockingFailureException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "This request was already claimed.");
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+        return "redirect:/student/requests/" + id;
+    }
+
+    private String tutorDisplayName(TutoringRequest request) {
+        if (request.getAssignedTutorId() == null) {
+            return null;
+        }
+        return userRepository.findById(request.getAssignedTutorId()).map(User::getPublicName).orElse(null);
+    }
+
+    private Map<Long, String> publicNames(List<MeetingOffer> offers) {
+        Map<Long, String> names = new HashMap<>();
+        for (MeetingOffer offer : offers) {
+            if (offer.getTutorId() != null && !names.containsKey(offer.getTutorId())) {
+                userRepository.findById(offer.getTutorId())
+                        .ifPresent(user -> names.put(user.getId(), user.getPublicName()));
+            }
+        }
+        return names;
+    }
+
+    private TutoringRequest draftRequest(String course, String topic, String description, String meetingMethod,
+                                         String responseTime, String effort, Integer bounty) {
+        TutoringRequest request = new TutoringRequest();
+        request.setCourse(course);
+        request.setTopic(topic);
+        request.setShortDescription(description);
+        request.setPreferredMeetingMethod(meetingMethod);
+        request.setDesiredResponseTime(responseTime);
+        request.setExpectedEffort(effort);
+        request.setBountyValue(bounty == null ? 0 : bounty);
+        return request;
     }
 
     private User requireStudent(Principal principal) {
