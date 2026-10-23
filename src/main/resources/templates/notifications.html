@@ -20,7 +20,13 @@
                     <li class="rt-feed-item" th:each="note : ${notifications}" th:classappend="${note.readAt == null} ? 'is-unread'">
                         <div>
                             <div>
-                                <a class="rt-feed-message" th:if="${note.link != null}" th:href="${note.link}" th:text="${note.message}">Update</a>
+                                <form th:if="${note.readAt == null and note.link != null}"
+                                      th:action="@{/notifications/{id}/read(id=${note.id})}" method="post" class="m-0">
+                                    <input type="hidden" name="follow" value="true">
+                                    <button type="submit" class="rt-feed-message btn btn-link p-0" th:text="${note.message}">Update</button>
+                                </form>
+                                <a class="rt-feed-message" th:if="${note.readAt != null and note.link != null}"
+                                   th:href="${note.link}" th:text="${note.message}">Update</a>
                                 <span class="rt-feed-message" th:if="${note.link == null}" th:text="${note.message}">Update</span>
                             </div>
                             <div class="rt-feed-time" th:text="${#temporals.format(note.createdAt, 'MMM d, h:mm a')}">Oct 15, 4:00 PM</div>

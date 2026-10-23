@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
+@Table(indexes = @Index(columnList = "tutor_id"))
 public class Review {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,6 +22,7 @@ public class Review {
     @Column(nullable = false)
     private Integer score;
 
+    @Column(length = 1000)
     private String feedback;
 
     private LocalDateTime createdAt = LocalDateTime.now();

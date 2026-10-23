@@ -8,19 +8,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
 
     private final MustChangePasswordInterceptor mustChangePasswordInterceptor;
-    private final RequestExpirationInterceptor requestExpirationInterceptor;
 
-    public WebConfig(MustChangePasswordInterceptor mustChangePasswordInterceptor,
-                     RequestExpirationInterceptor requestExpirationInterceptor) {
+    public WebConfig(MustChangePasswordInterceptor mustChangePasswordInterceptor) {
         this.mustChangePasswordInterceptor = mustChangePasswordInterceptor;
-        this.requestExpirationInterceptor = requestExpirationInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(requestExpirationInterceptor)
-                .addPathPatterns("/**")
-                .excludePathPatterns("/css/**");
         registry.addInterceptor(mustChangePasswordInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(

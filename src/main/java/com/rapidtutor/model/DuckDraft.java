@@ -1,32 +1,65 @@
 package com.rapidtutor.model;
 
-import java.io.Serializable;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 
-/** The problem and diagnostic note held until the student posts or closes it. */
-public class DuckDraft implements Serializable {
+import java.time.LocalDateTime;
+
+/** A student's private record of a blocker, the note, what they tried, and the outcome. */
+@Entity
+@Table(indexes = @Index(columnList = "student_id"))
+public class DuckDraft {
 
     public static final String SESSION_KEY = "duckDraft";
+    public static final String BOOKING_KEY = "duckBooking";
 
+    public static final String TRYING = "TRYING";
+    public static final String SOLVED = "SOLVED";
+    public static final String ESCALATED = "ESCALATED";
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private Long studentId;
     private String course;
     private String topic;
-    private String shortDescription;
-    private String preferredMeetingMethod;
-    private String desiredResponseTime;
-    private String expectedEffort;
-    private Integer bountyValue;
+
+    @Column(length = 2000)
+    private String description;
+
+    @Column(length = 2000)
     private String note;
+
+    @Column(length = 2000)
     private String reply;
 
-    public static DuckDraft from(TutoringRequest request, String note) {
+    @Column(length = 2000)
+    private String answer;
+
+    @Column(length = 500)
+    private String takeaway;
+
+    private String outcome;
+    private Long requestId;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
+    public static DuckDraft from(TutoringRequest request, String note, Long studentId) {
         DuckDraft draft = new DuckDraft();
+        draft.studentId = studentId;
         draft.course = request.getCourse();
         draft.topic = request.getTopic();
-        draft.shortDescription = request.getShortDescription();
-        draft.preferredMeetingMethod = request.getPreferredMeetingMethod();
-        draft.desiredResponseTime = request.getDesiredResponseTime();
-        draft.expectedEffort = request.getExpectedEffort();
-        draft.bountyValue = request.getBountyValue();
+        draft.description = request.getShortDescription();
         draft.note = note;
+        draft.outcome = TRYING;
         return draft;
     }
 
@@ -34,12 +67,38 @@ public class DuckDraft implements Serializable {
         TutoringRequest request = new TutoringRequest();
         request.setCourse(course);
         request.setTopic(topic);
-        request.setShortDescription(shortDescription);
-        request.setPreferredMeetingMethod(preferredMeetingMethod);
-        request.setDesiredResponseTime(desiredResponseTime);
-        request.setExpectedEffort(expectedEffort);
-        request.setBountyValue(bountyValue == null ? 0 : bountyValue);
+        request.setShortDescription(description);
         return request;
+    }
+
+    /** The follow-up when the student walked it through, otherwise the first note. */
+    public String savedNote() {
+        if (reply != null && !reply.isBlank()) {
+            return reply;
+        }
+        return note;
+    }
+
+    @PrePersist
+    void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = createdAt;
+        if (outcome == null) {
+            outcome = TRYING;
+        }
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getStudentId() {
+        return studentId;
     }
 
     public String getCourse() {
@@ -50,24 +109,8 @@ public class DuckDraft implements Serializable {
         return topic;
     }
 
-    public String getShortDescription() {
-        return shortDescription;
-    }
-
-    public String getPreferredMeetingMethod() {
-        return preferredMeetingMethod;
-    }
-
-    public String getDesiredResponseTime() {
-        return desiredResponseTime;
-    }
-
-    public String getExpectedEffort() {
-        return expectedEffort;
-    }
-
-    public Integer getBountyValue() {
-        return bountyValue;
+    public String getDescription() {
+        return description;
     }
 
     public String getNote() {
@@ -82,11 +125,39 @@ public class DuckDraft implements Serializable {
         this.reply = reply;
     }
 
-    /** The follow-up when the student walked it through, otherwise the first note. */
-    public String savedNote() {
-        if (reply != null && !reply.isBlank()) {
-            return reply;
-        }
-        return note;
+    public String getAnswer() {
+        return answer;
+    }
+
+    public void setAnswer(String answer) {
+        this.answer = answer;
+    }
+
+    public String getTakeaway() {
+        return takeaway;
+    }
+
+    public void setTakeaway(String takeaway) {
+        this.takeaway = takeaway;
+    }
+
+    public String getOutcome() {
+        return outcome;
+    }
+
+    public void setOutcome(String outcome) {
+        this.outcome = outcome;
+    }
+
+    public Long getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(Long requestId) {
+        this.requestId = requestId;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 }

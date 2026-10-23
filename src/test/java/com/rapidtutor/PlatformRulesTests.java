@@ -1,7 +1,9 @@
 package com.rapidtutor;
 
+import com.rapidtutor.model.MeetingOffer;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
+import com.rapidtutor.repository.DuckDraftRepository;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
 import com.rapidtutor.repository.MeetingOfferRepository;
 import com.rapidtutor.repository.NotificationRepository;
@@ -86,8 +88,12 @@ class PlatformRulesTests {
     @Autowired
     private KnowledgeArticleRepository knowledgeArticleRepository;
 
+    @Autowired
+    private DuckDraftRepository duckDraftRepository;
+
     @BeforeEach
     void resetRows() {
+        duckDraftRepository.deleteAll();
         reviewRepository.deleteAll();
         notificationRepository.deleteAll();
         eventRepository.deleteAll();
@@ -153,12 +159,13 @@ class PlatformRulesTests {
 
     @Test
     void httpRejectsANegativeBounty() throws Exception {
+        MockHttpSession session = duckSession("Loops", "I am stuck on the loop condition.");
+
         mockMvc.perform(post("/student/requests")
+                        .session(session)
                         .with(user("student1").roles("STUDENT"))
                         .with(csrf())
-                        .param("course", "HCDD 412")
-                        .param("topic", "Loops")
-                        .param("shortDescription", "I am stuck on the loop condition.")
+                        .param("studentExplanation", "I tried the condition.")
                         .param("bountyValue", "-5")
                         .param("preferredMeetingMethod", "Zoom")
                         .param("desiredResponseTime", "Today")
@@ -259,6 +266,46 @@ class PlatformRulesTests {
     }
 
     @Test
+    void descriptionOver2000CharactersIsRejected() throws Exception {
+        mockMvc.perform(post("/student/requests/duck")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("course", "HCDD 412")
+                        .param("topic", "Loops")
+                        .param("shortDescription", "a".repeat(2001))
+                        .param("preferredMeetingMethod", "Zoom")
+                        .param("desiredResponseTime", "Not urgent")
+                        .param("expectedEffort", "Quick explanation (10-15 mins)")
+                        .param("bountyValue", "0"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Keep that entry under 2000 characters.")))
+                .andExpect(content().string(containsString("maxlength=\"2000\"")));
+        assertEquals(0, requestRepository.count());
+    }
+
+    @Test
+    void feedbackOver1000CharactersIsRejected() throws Exception {
+        User student = userRepository.findByUsername("student1");
+        User tutor = userRepository.findByUsername("tutor1");
+        TutoringRequest request = requestRepository.save(newRequest(student, "HCDD 412", "Long review"));
+        request.setStatus("RESOLVED");
+        request.setAssignedTutorId(tutor.getId());
+        request = requestRepository.save(request);
+
+        mockMvc.perform(post("/student/reviews")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("requestId", request.getId().toString())
+                        .param("score", "4")
+                        .param("feedback", "b".repeat(1001)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Keep feedback under 1000 characters.")))
+                .andExpect(content().string(containsString("maxlength=\"1000\"")));
+        assertEquals(0, reviewRepository.count());
+        assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
+    }
+
+    @Test
     void tutorBoardHidesOtherSubjectsAndOfferIsRejected() throws Exception {
         User student = userRepository.findByUsername("student1");
         requestRepository.save(newRequest(student, "HCDD 412", "Visible topic beta"));
@@ -317,7 +364,7 @@ class PlatformRulesTests {
                 .andExpect(content().string(containsString("Offer me")))
                 .andExpect(content().string(containsString("Jun 2, 3:30 PM")));
 
-        mockMvc.perform(get("/student/dashboard").with(user("student1").roles("STUDENT")))
+        mockMvc.perform(get("/student/requests").with(user("student1").roles("STUDENT")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Time offers")))
                 .andExpect(content().string(containsString("Offer me")));
@@ -401,6 +448,31 @@ class PlatformRulesTests {
     }
 
     @Test
+    void duplicateUsernameIsRejected() throws Exception {
+        mockMvc.perform(post("/register")
+                        .with(csrf())
+                        .param("displayName", "Ada Student")
+                        .param("email", "ada@example.com")
+                        .param("username", "ada")
+                        .param("password", "first-password")
+                        .param("confirmPassword", "first-password"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"recovery-code\"")));
+
+        mockMvc.perform(post("/register")
+                        .with(csrf())
+                        .param("displayName", "Ada Two")
+                        .param("email", "ada-two@example.com")
+                        .param("username", "ada")
+                        .param("password", "second-password")
+                        .param("confirmPassword", "second-password"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("That username is already taken.")));
+
+        assertEquals(1, userRepository.findAll().stream().filter(user -> "ada".equals(user.getUsername())).count());
+    }
+
+    @Test
     void applicantCannotOpenTheTutorBoardUntilApproved() throws Exception {
         mockMvc.perform(post("/apply/tutor")
                         .with(csrf())
@@ -429,6 +501,41 @@ class PlatformRulesTests {
         User approved = userRepository.findByUsername("applicant1");
         assertEquals("TUTOR", approved.getRole());
         assertEquals("HCDD 412, IST 311", approved.getSubjects());
+    }
+
+    @Test
+    void approvedApplicantMustSignInAgainForTheBoard() throws Exception {
+        mockMvc.perform(post("/apply/tutor")
+                        .with(csrf())
+                        .param("displayName", "Later Tutor")
+                        .param("email", "latertutor@example.com")
+                        .param("username", "applicant2")
+                        .param("password", "tutor-password")
+                        .param("confirmPassword", "tutor-password")
+                        .param("courses", "HCDD 412"))
+                .andExpect(status().isOk());
+
+        MvcResult login = mockMvc.perform(post("/login")
+                        .param("username", "applicant2")
+                        .param("password", "tutor-password")
+                        .with(csrf()))
+                .andExpect(redirectedUrl("/apply/status"))
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
+
+        User applicant = userRepository.findByUsername("applicant2");
+        mockMvc.perform(post("/admin/applicants/" + applicant.getId() + "/approve")
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
+                .andExpect(redirectedUrl("/admin"));
+
+        mockMvc.perform(get("/apply/status").session(session))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Sign in again to open the board.")))
+                .andExpect(content().string(not(containsString("Open the tutor board"))));
+
+        mockMvc.perform(get("/tutor/board").session(session))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -470,6 +577,10 @@ class PlatformRulesTests {
                         .with(user("student1").roles("STUDENT"))
                         .with(csrf())
                         .param("studentExplanation", "I traced the condition and it never changes.")
+                        .param("preferredMeetingMethod", "Zoom")
+                        .param("desiredResponseTime", "Not urgent")
+                        .param("expectedEffort", "Quick explanation (10-15 mins)")
+                        .param("bountyValue", "0")
                         .param("status", "CLAIMED")
                         .param("studentId", "999")
                         .param("assignedTutorId", "999"))
@@ -482,6 +593,9 @@ class PlatformRulesTests {
         assertEquals("I traced the condition and it never changes.", stored.getStudentExplanation());
         assertEquals(SocraticNotes.offline("Binding check"), stored.getAiDiagnosticNote());
         assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
+        var draft = duckDraftRepository.findByStudentIdOrderByCreatedAtDesc(stored.getStudentId()).get(0);
+        assertEquals("ESCALATED", draft.getOutcome());
+        assertEquals(stored.getId(), draft.getRequestId());
     }
 
     @Test
@@ -493,10 +607,26 @@ class PlatformRulesTests {
                         .with(user("student1").roles("STUDENT"))
                         .with(csrf())
                         .param("studentExplanation", "The loop variable was never updated."))
-                .andExpect(redirectedUrl("/student/knowledge"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Write what you understand now.")));
+        assertEquals(0, knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Solved alone").size());
+
+        mockMvc.perform(post("/student/requests/duck/solved")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "The loop variable was never updated.")
+                        .param("takeaway", "Setters can refuse bad values."))
+                .andExpect(redirectedUrl("/student/dashboard"))
                 .andExpect(flash().attributeExists("successMessage"));
 
         assertEquals(0, requestRepository.count());
+        var drafts = duckDraftRepository.findByStudentIdOrderByCreatedAtDesc(
+                userRepository.findByUsername("student1").getId());
+        assertEquals(1, drafts.size());
+        assertEquals("SOLVED", drafts.get(0).getOutcome());
+        assertEquals("Setters can refuse bad values.", drafts.get(0).getTakeaway());
         assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
         var articles = knowledgeArticleRepository
                 .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Solved alone");
@@ -506,6 +636,15 @@ class PlatformRulesTests {
         assertEquals(SocraticNotes.offline("Solved alone").trim(), articles.get(0).getVerifiedSolution());
         assertFalse(articles.get(0).getProblemDescription().contains("The loop variable was never updated."));
         assertFalse(articles.get(0).getVerifiedSolution().contains("The loop variable was never updated."));
+        assertFalse(articles.get(0).getVerifiedSolution().contains("Setters can refuse bad values."));
+        assertFalse(articles.get(0).getProblemDescription().contains("Setters can refuse bad values."));
+
+        mockMvc.perform(get("/student/dashboard").with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("When I was stuck")))
+                .andExpect(content().string(containsString("What changed")))
+                .andExpect(content().string(containsString("Setters can refuse bad values.")))
+                .andExpect(content().string(containsString("I am stuck on the concept.")));
 
         mockMvc.perform(get("/student/knowledge")
                         .param("topic", "Solved alone")
@@ -541,22 +680,24 @@ class PlatformRulesTests {
                         .with(csrf())
                         .param("studentExplanation", "The condition checks the wrong variable."))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("The condition checks the wrong variable.")))
-                .andExpect(content().string(not(containsString("I forgot to increment the counter."))));
+                .andExpect(content().string(containsString("Soquacktic already replied once. Start over for a new note.")))
+                .andExpect(content().string(containsString("I forgot to increment the counter.")));
         assertEquals(0, requestRepository.count());
 
         mockMvc.perform(post("/student/requests/duck/solved")
                         .session(session)
                         .with(user("student1").roles("STUDENT"))
                         .with(csrf())
-                        .param("studentExplanation", "The condition checks the wrong variable."))
-                .andExpect(redirectedUrl("/student/knowledge"));
+                        .param("studentExplanation", "The condition checks the wrong variable.")
+                        .param("takeaway", "The counter has to change."))
+                .andExpect(redirectedUrl("/student/dashboard"));
 
         assertEquals(0, requestRepository.count());
         var articles = knowledgeArticleRepository
                 .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Loop counters");
         assertEquals(1, articles.size());
-        assertTrue(articles.get(0).getVerifiedSolution().contains("The condition checks the wrong variable."));
+        assertTrue(articles.get(0).getVerifiedSolution().contains("I forgot to increment the counter."));
+        assertFalse(articles.get(0).getVerifiedSolution().contains("The condition checks the wrong variable."));
         assertFalse(articles.get(0).getVerifiedSolution().contains("is the idea to clarify"));
     }
 
@@ -575,7 +716,11 @@ class PlatformRulesTests {
                         .session(session)
                         .with(user("student1").roles("STUDENT"))
                         .with(csrf())
-                        .param("studentExplanation", "I forgot to increment the counter."))
+                        .param("studentExplanation", "I forgot to increment the counter.")
+                        .param("preferredMeetingMethod", "Zoom")
+                        .param("desiredResponseTime", "Not urgent")
+                        .param("expectedEffort", "Quick explanation (10-15 mins)")
+                        .param("bountyValue", "0"))
                 .andExpect(redirectedUrl("/student/dashboard"));
 
         TutoringRequest stored = requestRepository.findAll().get(0);
@@ -695,7 +840,7 @@ class PlatformRulesTests {
                 .andExpect(redirectedUrl("/tutor/board"));
 
         assertEquals(0, offerRepository.count());
-        assertTrue(notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(student.getId()).stream()
+        assertTrue(notificationRepository.findTop50ByRecipientUserIdOrderByCreatedAtDesc(student.getId()).stream()
                 .anyMatch(note -> note.getMessage().contains("withdrew")));
     }
 
@@ -718,7 +863,7 @@ class PlatformRulesTests {
 
         assertEquals("CANCELED", requestRepository.findById(request.getId()).orElseThrow().getStatus());
         assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
-        assertTrue(notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(tutor.getId()).stream()
+        assertTrue(notificationRepository.findTop50ByRecipientUserIdOrderByCreatedAtDesc(tutor.getId()).stream()
                 .anyMatch(note -> note.getMessage().contains("canceled")));
     }
 
@@ -740,7 +885,7 @@ class PlatformRulesTests {
                         .with(csrf()))
                 .andExpect(flash().attributeExists("successMessage"));
 
-        assertTrue(notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(tutor.getId()).stream()
+        assertTrue(notificationRepository.findTop50ByRecipientUserIdOrderByCreatedAtDesc(tutor.getId()).stream()
                 .anyMatch(note -> note.getMessage().contains("accepted")));
     }
 
@@ -762,6 +907,37 @@ class PlatformRulesTests {
         assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
         assertTrue(eventRepository.findByRequestIdOrderByAtAsc(request.getId()).stream()
                 .anyMatch(event -> "EXPIRED".equals(event.getToStatus())));
+    }
+
+    @Test
+    void offerAndAcceptAreRejectedAfterTheDeadline() throws Exception {
+        User student = userRepository.findByUsername("student1");
+        User tutor = userRepository.findByUsername("tutor1");
+        TutoringRequest request = requestRepository.save(newRequest(student, "HCDD 412", "Already late"));
+        request.setDesiredResponseTime("ASAP");
+        request.setCreationTimestamp(LocalDateTime.now().minusHours(2));
+        request = requestRepository.save(request);
+
+        mockMvc.perform(post("/tutor/requests/" + request.getId() + "/offers")
+                        .with(user("tutor1").roles("TUTOR"))
+                        .with(csrf())
+                        .param("from", "board")
+                        .param("offeredTime", "2027-06-04T11:00"))
+                .andExpect(redirectedUrl("/tutor/board"))
+                .andExpect(flash().attribute("errorMessage", "This request has expired."));
+        assertEquals(0, offerRepository.count());
+
+        MeetingOffer offer = new MeetingOffer();
+        offer.setRequestId(request.getId());
+        offer.setTutorId(tutor.getId());
+        offer.setOfferedTime(LocalDateTime.of(2027, 6, 4, 11, 0));
+        offer = offerRepository.save(offer);
+
+        mockMvc.perform(post("/student/requests/" + request.getId() + "/offers/" + offer.getId() + "/accept")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf()))
+                .andExpect(flash().attribute("errorMessage", "This request has expired."));
+        assertEquals("OPEN", requestRepository.findById(request.getId()).orElseThrow().getStatus());
     }
 
     @Test
@@ -806,15 +982,13 @@ class PlatformRulesTests {
                         .with(csrf())
                         .param("course", "HCDD 412")
                         .param("topic", topic)
-                        .param("shortDescription", description)
-                        .param("preferredMeetingMethod", "Zoom")
-                        .param("desiredResponseTime", "Not urgent")
-                        .param("expectedEffort", "Quick explanation (10-15 mins)")
-                        .param("bountyValue", "0"))
+                        .param("shortDescription", description))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString(topic + " is the idea to clarify")))
                 .andExpect(content().string(containsString("Walk it through")))
                 .andExpect(content().string(containsString("Your answer")))
+                .andExpect(content().string(containsString("I'm still stuck")))
+                .andExpect(content().string(not(containsString("Meeting method"))))
                 .andExpect(content().string(not(containsString("Follow-up"))))
                 .andReturn();
         return (MockHttpSession) ready.getRequest().getSession(false);

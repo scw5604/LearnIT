@@ -17,7 +17,7 @@
             <ul class="navbar-nav me-auto">
                 <li class="nav-item" sec:authorize="hasRole('STUDENT')">
                     <a class="nav-link" th:href="@{/student/dashboard}"
-                       th:classappend="${#strings.startsWith(currentPath, '/student') and !#strings.startsWith(currentPath, '/student/knowledge')} ? 'active'">Requests</a>
+                       th:classappend="${#strings.startsWith(currentPath, '/student') and !#strings.startsWith(currentPath, '/student/knowledge')} ? 'active'">Blockers</a>
                 </li>
                 <li class="nav-item" sec:authorize="hasRole('STUDENT')">
                     <a class="nav-link" th:href="@{/student/knowledge}"

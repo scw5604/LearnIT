@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('LearnIT · Requests')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Blockers')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -9,62 +9,59 @@
         <div class="container">
             <div class="rt-page-header">
                 <div>
-                    <h1>My requests</h1>
-                    <p>Track open, claimed, and resolved sessions.</p>
+                    <h1>My blockers</h1>
+                    <p>What you were stuck on, and what changed.</p>
                 </div>
-                <a th:href="@{/student/requests/new}" class="btn btn-rt-primary">Post request</a>
+                <div class="d-flex align-items-center gap-3">
+                    <a th:href="@{/student/requests}">Sessions</a>
+                    <a th:href="@{/student/requests/new}" class="btn btn-rt-primary">Name a blocker</a>
+                </div>
             </div>
 
             <div th:replace="~{fragments/alerts :: alerts}"></div>
 
-            <div class="rt-card" th:if="${#lists.isEmpty(requests)}">
-                <p class="rt-empty">No requests yet. Post a blocker to get started.</p>
+            <div class="rt-card" th:if="${#lists.isEmpty(drafts)}">
+                <p class="rt-empty">Name what you're stuck on to get started.</p>
             </div>
 
-            <h2 class="h5 mb-3" th:if="${offeredRequests != null and !#lists.isEmpty(offeredRequests)}">Time offers</h2>
-            <div class="row g-3 mb-5" th:if="${offeredRequests != null and !#lists.isEmpty(offeredRequests)}">
-                <div class="col-md-6" th:each="req : ${offeredRequests}">
+            <div class="row g-3" th:if="${drafts != null and !#lists.isEmpty(drafts)}">
+                <div class="col-md-6" th:each="draft : ${drafts}">
                     <article class="rt-card rt-request-card h-100">
                         <div class="d-flex justify-content-between align-items-start gap-2">
-                            <p class="rt-kicker mb-0" th:text="${req.course}">HCDD 412</p>
-                            <th:block th:replace="~{fragments/status :: status(${req.status})}"></th:block>
+                            <p class="rt-kicker mb-0" th:text="${draft.course}">HCDD 412</p>
+                            <span class="rt-badge rt-badge-open" th:if="${draft.outcome == 'TRYING'}">Trying</span>
+                            <span class="rt-badge rt-badge-resolved" th:if="${draft.outcome == 'SOLVED'}">Solved</span>
+                            <span class="rt-badge rt-badge-claimed" th:if="${draft.outcome == 'ESCALATED'}">With a tutor</span>
                         </div>
-                        <h2 th:text="${req.topic}">Topic</h2>
-                        <p th:text="${req.shortDescription}">Description</p>
-                        <div class="rt-meta">
-                            <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' tokens'}">0 tokens</span>
-                            <span th:text="${(offerCounts.get(req.id) != null ? offerCounts.get(req.id) : 0) + ' time offers'}">0 time offers</span>
-                            <span th:if="${req.aiDiagnosticNote == null or #strings.isEmpty(req.aiDiagnosticNote)}">Preparing note</span>
-                            <span th:if="${req.aiDiagnosticNote != null and !#strings.isEmpty(req.aiDiagnosticNote)}">Note ready</span>
-                        </div>
-                        <div class="rt-actions">
-                            <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-primary">Open</a>
-                        </div>
-                    </article>
-                </div>
-            </div>
+                        <h2 th:text="${draft.topic}">Topic</h2>
 
-            <h2 class="h5 mb-3" th:if="${offeredRequests != null and !#lists.isEmpty(offeredRequests) and otherRequests != null and !#lists.isEmpty(otherRequests)}">My requests</h2>
-            <div class="row g-3" th:if="${otherRequests != null and !#lists.isEmpty(otherRequests)}">
-                <div class="col-md-6" th:each="req : ${otherRequests}">
-                    <article class="rt-card rt-request-card h-100">
-                        <div class="d-flex justify-content-between align-items-start gap-2">
-                            <p class="rt-kicker mb-0" th:text="${req.course}">HCDD 412</p>
-                            <th:block th:replace="~{fragments/status :: status(${req.status})}"></th:block>
+                        <div th:if="${draft.takeaway != null}">
+                            <p class="rt-kicker">When I was stuck</p>
+                            <p th:text="${draft.description}">Description</p>
+                            <p class="rt-kicker">What changed</p>
+                            <p th:text="${draft.takeaway}">The takeaway</p>
                         </div>
-                        <h2 th:text="${req.topic}">Topic</h2>
-                        <p th:text="${req.shortDescription}">Description</p>
-                        <div class="rt-meta">
-                            <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' tokens'}">0 tokens</span>
-                            <span th:if="${req.status == 'OPEN'}" th:text="${(offerCounts.get(req.id) != null ? offerCounts.get(req.id) : 0) + ' time offers'}">0 time offers</span>
-                            <span th:if="${req.status == 'OPEN' and (req.aiDiagnosticNote == null or #strings.isEmpty(req.aiDiagnosticNote))}">Preparing note</span>
-                            <span th:if="${req.status == 'OPEN' and req.aiDiagnosticNote != null and !#strings.isEmpty(req.aiDiagnosticNote)}">Note ready</span>
-                            <span th:if="${(req.status == 'CLAIMED' or req.status == 'RESOLVED') and tutorNames.get(req.id) != null}" th:text="${tutorNames.get(req.id)}">tutor1</span>
-                            <span th:if="${(req.status == 'CLAIMED' or req.status == 'RESOLVED') and req.offeredMeetingTime != null}"
-                                  th:text="${req.preferredMeetingMethod + ' on ' + #temporals.format(req.offeredMeetingTime, 'MMM d, h:mm a')}">Zoom on Oct 14, 4:00 PM</span>
-                        </div>
-                        <div class="rt-actions">
-                            <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-primary">Open</a>
+                        <p th:if="${draft.takeaway == null}" th:text="${draft.description}">Description</p>
+
+                        <div th:replace="~{fragments/diagnostic-note :: scaffold(${draft.note}, 'duck')}"></div>
+                        <div th:if="${draft.reply != null}" th:replace="~{fragments/diagnostic-note :: scaffold(${draft.reply}, 'followup')}"></div>
+
+                        <p class="mt-3" th:if="${draft.answer != null and !#strings.isEmpty(draft.answer)}">
+                            <span class="rt-kicker">Your answer</span>
+                            <span th:text="${draft.answer}">I tried the first step.</span>
+                        </p>
+
+                        <form class="mt-3" th:if="${draft.outcome == 'ESCALATED' and draft.requestId != null and draft.takeaway == null and requestStatuses.get(draft.requestId) == 'RESOLVED'}"
+                              th:action="@{/student/drafts/{id}/takeaway(id=${draft.id})}" method="post">
+                            <label class="form-label" th:for="|takeaway-${draft.id}|">What changed</label>
+                            <textarea class="form-control mb-2" rows="2" maxlength="500" required
+                                      th:id="|takeaway-${draft.id}|" name="takeaway"
+                                      placeholder="What do you understand now?"></textarea>
+                            <button type="submit" class="btn btn-sm btn-rt-primary">Save what changed</button>
+                        </form>
+
+                        <div class="rt-actions" th:if="${draft.outcome == 'ESCALATED' and draft.requestId != null}">
+                            <a th:href="@{/student/requests/{id}(id=${draft.requestId})}" class="btn btn-sm btn-rt-primary">Open the request</a>
                         </div>
                     </article>
                 </div>

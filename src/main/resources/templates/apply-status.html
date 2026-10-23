@@ -18,9 +18,11 @@
                         Your tutor application was declined.
                     </p>
                     <p th:if="${applicant != null and applicant.role == 'TUTOR'}">
-                        You are approved.
-                        <a th:href="@{/tutor/board}">Open the tutor board</a>.
+                        You are approved. Sign in again to open the board.
                     </p>
+                    <form th:if="${applicant != null and applicant.role == 'TUTOR'}" th:action="@{/logout}" method="post" class="mt-3 mb-0">
+                        <button type="submit" class="btn btn-rt-primary">Sign out</button>
+                    </form>
                     <p class="mb-0" th:if="${applicant == null}">Sign in to see your application.</p>
                 </div>
             </div>

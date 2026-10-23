@@ -7,7 +7,7 @@
 
     <main class="rt-main">
         <div class="container">
-            <a class="rt-back" th:href="@{/student/dashboard}">Back to requests</a>
+            <a class="rt-back" th:href="@{/student/requests}">Back to requests</a>
             <div class="row justify-content-center">
                 <div class="col-lg-6">
                     <div class="rt-panel">
@@ -34,7 +34,7 @@
 
                             <div class="mb-4">
                                 <label class="form-label" for="feedback">Feedback</label>
-                                <textarea id="feedback" class="form-control" name="feedback" rows="3" placeholder="What did the tutor explain well?" th:text="${feedback}"></textarea>
+                                <textarea id="feedback" class="form-control" name="feedback" rows="3" maxlength="1000" placeholder="What did the tutor explain well?" th:text="${feedback}"></textarea>
                             </div>
 
                             <button type="submit" class="btn btn-rt-primary w-100">Submit review</button>

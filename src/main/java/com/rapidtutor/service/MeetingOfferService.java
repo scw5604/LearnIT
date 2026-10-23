@@ -42,6 +42,7 @@ public class MeetingOfferService {
         if (!"OPEN".equals(request.getStatus())) {
             throw new IllegalStateException("This request is no longer available.");
         }
+        requireBeforeDeadline(request);
         requireFuture(offeredTime);
 
         MeetingOffer offer = offerRepository.findByRequestIdAndTutorId(requestId, tutor.getId())
@@ -90,6 +91,7 @@ public class MeetingOfferService {
         if (!"OPEN".equals(request.getStatus())) {
             throw new IllegalStateException("This request was already claimed.");
         }
+        requireBeforeDeadline(request);
 
         request.setStatus("CLAIMED");
         request.setAssignedTutorId(offer.getTutorId());
@@ -103,9 +105,11 @@ public class MeetingOfferService {
                 "/tutor/requests/" + requestId);
     }
 
-    @Transactional
-    public void deleteOffers(Long requestId) {
-        offerRepository.deleteByRequestId(requestId);
+    private void requireBeforeDeadline(TutoringRequest request) {
+        LocalDateTime deadline = RequestExpiration.deadline(request);
+        if (deadline != null && !LocalDateTime.now(clock).isBefore(deadline)) {
+            throw new IllegalStateException("This request has expired.");
+        }
     }
 
     private void requireFuture(LocalDateTime offeredTime) {

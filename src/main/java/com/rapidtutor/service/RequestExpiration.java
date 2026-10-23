@@ -1,41 +1,43 @@
 package com.rapidtutor.service;
 
 import com.rapidtutor.model.TutoringRequest;
-import com.rapidtutor.repository.MeetingOfferRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class RequestExpiration {
 
+    private static final Logger log = LoggerFactory.getLogger(RequestExpiration.class);
+    private static final List<String> EXPIRING = List.of("ASAP", "Within 2 hours", "Today");
+
     private final TutoringRequestRepository requestRepository;
-    private final MeetingOfferRepository offerRepository;
     private final EconomyService economyService;
-    private final RequestLifecycle lifecycle;
     private final Clock clock;
 
-    public RequestExpiration(TutoringRequestRepository requestRepository, MeetingOfferRepository offerRepository,
-                             EconomyService economyService, RequestLifecycle lifecycle, Clock clock) {
+    public RequestExpiration(TutoringRequestRepository requestRepository, EconomyService economyService, Clock clock) {
         this.requestRepository = requestRepository;
-        this.offerRepository = offerRepository;
         this.economyService = economyService;
-        this.lifecycle = lifecycle;
         this.clock = clock;
     }
 
-    @Transactional
+    @Scheduled(fixedDelay = 60_000)
     public void expireDue() {
         LocalDateTime now = LocalDateTime.now(clock);
-        for (TutoringRequest request : requestRepository.findByStatus("OPEN")) {
+        for (TutoringRequest request : requestRepository.findByStatusAndDesiredResponseTimeIn("OPEN", EXPIRING)) {
             LocalDateTime deadline = deadline(request);
             if (deadline != null && !now.isBefore(deadline)) {
-                economyService.expireAndRefund(request.getId());
-                offerRepository.deleteByRequestId(request.getId());
-                lifecycle.record(request.getId(), "OPEN", "EXPIRED", "system");
+                try {
+                    economyService.expireAndRefund(request.getId());
+                } catch (RuntimeException e) {
+                    log.warn("Could not expire request {}: {}", request.getId(), e.getMessage());
+                }
             }
         }
     }

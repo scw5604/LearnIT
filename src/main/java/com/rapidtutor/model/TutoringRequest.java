@@ -4,6 +4,10 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
+@Table(indexes = {
+        @Index(columnList = "status"),
+        @Index(columnList = "student_id")
+})
 public class TutoringRequest {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -12,6 +16,8 @@ public class TutoringRequest {
     private Long studentId;
     private String course;
     private String topic;
+
+    @Column(length = 2000)
     private String shortDescription;
     private String desiredResponseTime;
     private String expectedEffort;

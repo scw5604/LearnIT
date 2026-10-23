@@ -39,7 +39,7 @@ public class AccountService {
         user.setRole("STUDENT");
         user.setTokenBalance(STARTER_TOKENS);
         String code = attachRecoveryCode(user);
-        return new CreatedAccount(userRepository.save(user), code);
+        return new CreatedAccount(userRepository.saveAndFlush(user), code);
     }
 
     @Transactional
@@ -51,7 +51,7 @@ public class AccountService {
         user.setTokenBalance(0);
         user.setAppliedSubjects(subjects);
         String code = attachRecoveryCode(user);
-        return new CreatedAccount(userRepository.save(user), code);
+        return new CreatedAccount(userRepository.saveAndFlush(user), code);
     }
 
     @Transactional
@@ -62,7 +62,7 @@ public class AccountService {
         user.setTokenBalance(0);
         user.setMustChangePassword(true);
         String code = attachRecoveryCode(user);
-        return new CreatedAccount(userRepository.save(user), code);
+        return new CreatedAccount(userRepository.saveAndFlush(user), code);
     }
 
     @Transactional

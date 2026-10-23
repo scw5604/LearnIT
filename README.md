@@ -1,6 +1,6 @@
 # LearnIT
 
-LearnIT is a proof-of-concept for the IST 440W capstone. A student tries to clear a course blocker before a person is involved. Soquacktic, the rubber duck, writes one diagnostic note and can reply once to what the student types. The shared databank keeps course notes and those diagnostic notes. If the student is still stuck, they can post for a peer tutor on this platform. Nothing in that flow stops them from getting help from a tutor somewhere else.
+LearnIT is a proof-of-concept for the IST 440W capstone. A student tries to clear a course blocker before a person is involved. They name the blocker with a course, topic, and description. Soquacktic, the rubber duck, writes one diagnostic note and can reply once to what the student types. When the student figures it out, they write what changed, and the blocker is kept on their **My blockers** page. The shared databank keeps course notes and those diagnostic notes. If the student is still stuck, they choose a meeting method, response time, session length, and bounty, and post for a peer tutor on this platform. Nothing in that flow stops them from getting help from a tutor somewhere else.
 
 Administrators approve tutors and keep accounts working. That management is how the platform runs. It is not the innovation.
 
@@ -24,7 +24,7 @@ Administrators approve tutors and keep accounts working. That management is how 
    - **macOS / Linux:** `./mvnw spring-boot:run`
 4. On a **fresh** database, the console prints when demo users and the knowledge bank are seeded. If you already have a local `data/` folder from a previous run, those messages will not appear.
 
-A diagnostic note is required before a request exists. Talk it through stores that note. If `GROQ_API_KEY` is unset, or the reply cannot be shown, the app uses the offline note. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and start the app with that variable set. The key is not stored in the project.
+A diagnostic note is required before a request exists. **Name a blocker** on the student home opens Talk it through, which stores that note. If `GROQ_API_KEY` is unset, or the reply cannot be shown, the app uses the offline note. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and start the app with that variable set. The key is not stored in the project.
 
 ## Accessing the application
 
@@ -35,7 +35,7 @@ A diagnostic note is required before a request exists. Talk it through stores th
   Username: `sa`  
   Password: (leave blank)
 
-Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. That approval is platform management. A session is claimed when the student accepts that time. Seeded `tutor1` can offer times immediately.
+Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. That approval is platform management. An approved applicant signs out and signs in again to open the tutor board. A session is claimed when the student accepts that time. Seeded `tutor1` can offer times immediately.
 
 ## Default test accounts
 
@@ -45,7 +45,7 @@ Passwords are stored with BCrypt. If you already have a `data/` folder from an o
 
 | Role | Username | Password | Use |
 |---|---|---|---|
-| Student | `student1` | `password` | Talk it through, use the databank, or post a request |
+| Student | `student1` | `password` | Name a blocker, talk it through, use the databank, or post a request |
 | Tutor | `tutor1` | `password` | Offer times for HCDD 412, IST 440W, IST 311, HCDD 411, HCDD 331, and IST 230 |
 | Admin | `admin` | `password` | Approve tutors, overview, and insights |
 
@@ -53,4 +53,5 @@ Passwords are stored with BCrypt. If you already have a `data/` folder from an o
 
 - H2 writes to `./data/rapidtutor`. That folder is gitignored so each machine gets its own empty database and seeder run.
 - The knowledge bank is seeded independently of users. If demo accounts already exist but articles do not, articles are still loaded.
-- To reset everything (users, tokens, tickets, knowledge bank): stop the server, delete the `data/` folder, and start the app again.
+- To reset everything (users, tokens, blockers, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again.
+- Delete `data/` after pulling this version. `ddl-auto=update` adds the new blocker table, but it does not widen existing columns. An older database keeps 255-character limits on request descriptions and review feedback, so longer entries fail.

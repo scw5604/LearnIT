@@ -22,17 +22,12 @@ public class CurrentUserModelAdvice {
 
     @ModelAttribute("currentUser")
     public User currentUser(Principal principal) {
-        User user = find(principal);
-        return user;
+        return find(principal);
     }
 
     @ModelAttribute("unreadCount")
-    public long unreadCount(Principal principal) {
-        User user = find(principal);
-        if (user == null) {
-            return 0;
-        }
-        return notificationRepository.countByRecipientUserIdAndReadAtIsNull(user.getId());
+    public long unreadCount(@ModelAttribute(name = "currentUser", binding = false) User user) {
+        return user == null ? 0 : notificationRepository.countByRecipientUserIdAndReadAtIsNull(user.getId());
     }
 
     @ModelAttribute("currentPath")

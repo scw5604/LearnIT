@@ -7,6 +7,7 @@ import com.rapidtutor.model.MeetingOffer;
 import com.rapidtutor.model.Review;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
+import com.rapidtutor.repository.DuckDraftRepository;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
 import com.rapidtutor.repository.MeetingOfferRepository;
 import com.rapidtutor.repository.RequestEventRepository;
@@ -17,9 +18,7 @@ import com.rapidtutor.service.AiDiagnosisService;
 import com.rapidtutor.service.EconomyService;
 import com.rapidtutor.service.KnowledgeBankService;
 import com.rapidtutor.service.MeetingOfferService;
-import com.rapidtutor.service.NotificationService;
 import com.rapidtutor.service.RequestFields;
-import com.rapidtutor.service.RequestLifecycle;
 import com.rapidtutor.service.TriageCloseService;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -48,22 +47,20 @@ public class StudentController {
     private final UserRepository userRepository;
     private final MeetingOfferRepository offerRepository;
     private final MeetingOfferService meetingOfferService;
-    private final RequestLifecycle requestLifecycle;
     private final RequestEventRepository eventRepository;
-    private final NotificationService notificationService;
     private final KnowledgeArticleRepository knowledgeArticleRepository;
     private final KnowledgeBankService knowledgeBankService;
     private final TriageCloseService triageCloseService;
+    private final DuckDraftRepository draftRepository;
 
     public StudentController(EconomyService economyService, TutoringRequestRepository requestRepository,
                              ReviewRepository reviewRepository, AiDiagnosisService aiDiagnosisService,
                              UserRepository userRepository, MeetingOfferRepository offerRepository,
-                             MeetingOfferService meetingOfferService,
-                             RequestLifecycle requestLifecycle, RequestEventRepository eventRepository,
-                             NotificationService notificationService,
+                             MeetingOfferService meetingOfferService, RequestEventRepository eventRepository,
                              KnowledgeArticleRepository knowledgeArticleRepository,
                              KnowledgeBankService knowledgeBankService,
-                             TriageCloseService triageCloseService) {
+                             TriageCloseService triageCloseService,
+                             DuckDraftRepository draftRepository) {
         this.economyService = economyService;
         this.requestRepository = requestRepository;
         this.reviewRepository = reviewRepository;
@@ -71,17 +68,16 @@ public class StudentController {
         this.userRepository = userRepository;
         this.offerRepository = offerRepository;
         this.meetingOfferService = meetingOfferService;
-        this.requestLifecycle = requestLifecycle;
         this.eventRepository = eventRepository;
-        this.notificationService = notificationService;
         this.knowledgeArticleRepository = knowledgeArticleRepository;
         this.knowledgeBankService = knowledgeBankService;
         this.triageCloseService = triageCloseService;
+        this.draftRepository = draftRepository;
     }
 
     @GetMapping("/requests/new")
     public String showRequestForm(Model model, HttpSession session) {
-        session.removeAttribute(DuckDraft.SESSION_KEY);
+        clearDuck(session);
         TutoringRequest request = new TutoringRequest();
         request.setCourse(Courses.HCDD_412);
         model.addAttribute("tutoringRequest", request);
@@ -93,61 +89,97 @@ public class StudentController {
     public String talkItThrough(@RequestParam(required = false) String course,
                                 @RequestParam(required = false) String topic,
                                 @RequestParam(required = false) String shortDescription,
-                                @RequestParam(required = false) String preferredMeetingMethod,
-                                @RequestParam(required = false) String desiredResponseTime,
-                                @RequestParam(required = false) String expectedEffort,
-                                @RequestParam(required = false) Integer bountyValue,
                                 Principal principal, Model model, HttpSession session) {
-        requireStudent(principal);
+        User student = requireStudent(principal);
         try {
-            TutoringRequest request = RequestFields.copy(course, topic, shortDescription, preferredMeetingMethod,
-                    desiredResponseTime, expectedEffort, bountyValue);
+            TutoringRequest request = RequestFields.blocker(course, topic, shortDescription);
             String note = aiDiagnosisService.prepareNote(request.getCourse(), request.getTopic(), request.getShortDescription());
-            DuckDraft draft = DuckDraft.from(request, note);
-            session.setAttribute(DuckDraft.SESSION_KEY, draft);
-            return duckForm(model, draft, null, null);
+            DuckDraft draft = draftRepository.save(DuckDraft.from(request, note, student.getId()));
+            session.setAttribute(DuckDraft.SESSION_KEY, draft.getId());
+            session.removeAttribute(DuckDraft.BOOKING_KEY);
+            return duckForm(model, draft, null, null, null, false);
         } catch (IllegalStateException | IllegalArgumentException e) {
-            return requestForm(model, draftRequest(course, topic, shortDescription, preferredMeetingMethod,
-                    desiredResponseTime, expectedEffort, bountyValue), e.getMessage());
+            return requestForm(model, draftRequest(course, topic, shortDescription), e.getMessage());
         }
     }
 
-    @PostMapping("/requests/duck/solved")
-    public String figuredItOut(Principal principal, HttpSession session, RedirectAttributes redirectAttributes) {
-        requireStudent(principal);
-        DuckDraft draft = duckDraft(session);
-        if (draft == null) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Talk it through before posting.");
-            return "redirect:/student/requests/new";
-        }
-        knowledgeBankService.saveTriage(draft.getCourse(), draft.getTopic(), draft.savedNote());
-        session.removeAttribute(DuckDraft.SESSION_KEY);
-        redirectAttributes.addFlashAttribute("successMessage", "Saved to the databank. No request was posted.");
-        return "redirect:/student/knowledge";
-    }
-
-    @PostMapping("/requests/duck/reply")
-    public String walkItThrough(@RequestParam(required = false) String studentExplanation,
-                                Principal principal, Model model, HttpSession session, RedirectAttributes redirectAttributes) {
-        requireStudent(principal);
-        DuckDraft draft = duckDraft(session);
+    @PostMapping("/requests/duck/book")
+    public String openBooking(@RequestParam(required = false) String studentExplanation,
+                              Principal principal, Model model, HttpSession session,
+                              RedirectAttributes redirectAttributes) {
+        User student = requireStudent(principal);
+        DuckDraft draft = duckDraft(session, student);
         if (draft == null) {
             redirectAttributes.addFlashAttribute("errorMessage", "Talk it through before posting.");
             return "redirect:/student/requests/new";
         }
         try {
             String explanation = requiredExplanation(studentExplanation);
+            draft.setAnswer(explanation);
+            draftRepository.save(draft);
+            session.setAttribute(DuckDraft.BOOKING_KEY, Boolean.TRUE);
+            return duckForm(model, draft, explanation, null, null, true);
+        } catch (IllegalArgumentException e) {
+            return duckForm(model, draft, studentExplanation, null, e.getMessage(), false);
+        }
+    }
+
+    @PostMapping("/requests/duck/solved")
+    public String figuredItOut(@RequestParam(required = false) String studentExplanation,
+                               @RequestParam(required = false) String takeaway,
+                               Principal principal, Model model, HttpSession session,
+                               RedirectAttributes redirectAttributes) {
+        User student = requireStudent(principal);
+        DuckDraft draft = duckDraft(session, student);
+        if (draft == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Talk it through before posting.");
+            return "redirect:/student/requests/new";
+        }
+        try {
+            String cleanTakeaway = requiredTakeaway(takeaway);
+            if (studentExplanation != null && !studentExplanation.isBlank()) {
+                draft.setAnswer(requiredExplanation(studentExplanation));
+            }
+            knowledgeBankService.saveTriage(draft.getCourse(), draft.getTopic(), draft.savedNote());
+            draft.setTakeaway(cleanTakeaway);
+            draft.setOutcome(DuckDraft.SOLVED);
+            draftRepository.save(draft);
+            clearDuck(session);
+            redirectAttributes.addFlashAttribute("successMessage",
+                    "Saved to your blockers. The note was added to the databank.");
+            return "redirect:/student/dashboard";
+        } catch (IllegalArgumentException e) {
+            return duckForm(model, draft, studentExplanation, takeaway, e.getMessage(), bookingOpen(session));
+        }
+    }
+
+    @PostMapping("/requests/duck/reply")
+    public String walkItThrough(@RequestParam(required = false) String studentExplanation,
+                                Principal principal, Model model, HttpSession session, RedirectAttributes redirectAttributes) {
+        User student = requireStudent(principal);
+        DuckDraft draft = duckDraft(session, student);
+        if (draft == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Talk it through before posting.");
+            return "redirect:/student/requests/new";
+        }
+        if (draft.getReply() != null) {
+            return duckForm(model, draft, studentExplanation, null,
+                    "Soquacktic already replied once. Start over for a new note.", bookingOpen(session));
+        }
+        try {
+            String explanation = requiredExplanation(studentExplanation);
             String reply = aiDiagnosisService.prepareFollowUp(
                     draft.getCourse(),
                     draft.getTopic(),
-                    draft.getShortDescription(),
+                    draft.getDescription(),
                     draft.getNote(),
                     explanation);
+            draft.setAnswer(explanation);
             draft.setReply(reply);
-            session.setAttribute(DuckDraft.SESSION_KEY, draft);
-            return duckForm(model, draft, explanation, null);
+            draftRepository.save(draft);
+            return duckForm(model, draft, explanation, null, null, bookingOpen(session));
         } catch (IllegalArgumentException e) {
-            return duckForm(model, draft, studentExplanation, e.getMessage());
+            return duckForm(model, draft, studentExplanation, null, e.getMessage(), bookingOpen(session));
         }
     }
 
@@ -162,37 +194,57 @@ public class StudentController {
                                 @RequestParam(required = false) String studentExplanation,
                                 Principal principal, Model model, HttpSession session) {
         User student = requireStudent(principal);
-        DuckDraft draft = duckDraft(session);
+        DuckDraft draft = duckDraft(session, student);
         if (draft != null) {
             try {
                 String explanation = requiredExplanation(studentExplanation);
-                TutoringRequest savedRequest = economyService.createRequestWithBounty(
-                        student.getUsername(), draft.toRequest(), draft.getBountyValue());
-                savedRequest.setAiDiagnosticNote(draft.savedNote());
-                savedRequest.setStudentExplanation(explanation);
-                savedRequest = requestRepository.save(savedRequest);
-                requestLifecycle.record(savedRequest.getId(), null, "OPEN", student.getUsername());
-                if (savedRequest.getAiDiagnosticNote() == null || savedRequest.getAiDiagnosticNote().isBlank()) {
-                    aiDiagnosisService.generateDiagnosticScaffold(
-                            savedRequest.getId(),
-                            savedRequest.getCourse(),
-                            savedRequest.getTopic(),
-                            savedRequest.getShortDescription());
-                }
-                session.removeAttribute(DuckDraft.SESSION_KEY);
+                TutoringRequest request = draft.toRequest();
+                RequestFields.booking(request, preferredMeetingMethod, desiredResponseTime, expectedEffort, bountyValue);
+                TutoringRequest created = economyService.createRequestWithBounty(
+                        student.getUsername(), request, request.getBountyValue(),
+                        draft.savedNote(), explanation);
+                draft.setAnswer(explanation);
+                draft.setOutcome(DuckDraft.ESCALATED);
+                draft.setRequestId(created.getId());
+                draftRepository.save(draft);
+                clearDuck(session);
                 return "redirect:/student/dashboard";
             } catch (IllegalStateException | IllegalArgumentException e) {
-                return duckForm(model, draft, studentExplanation, e.getMessage());
+                rememberBooking(model, preferredMeetingMethod, desiredResponseTime, expectedEffort, bountyValue);
+                session.setAttribute(DuckDraft.BOOKING_KEY, Boolean.TRUE);
+                return duckForm(model, draft, studentExplanation, null, e.getMessage(), true);
             }
         }
         try {
-            TutoringRequest request = RequestFields.copy(course, topic, shortDescription, preferredMeetingMethod,
-                    desiredResponseTime, expectedEffort, bountyValue);
+            TutoringRequest request = RequestFields.blocker(course, topic, shortDescription);
             return requestForm(model, request, "Talk it through before posting.");
         } catch (IllegalStateException | IllegalArgumentException e) {
-            return requestForm(model, draftRequest(course, topic, shortDescription, preferredMeetingMethod,
-                    desiredResponseTime, expectedEffort, bountyValue), e.getMessage());
+            return requestForm(model, draftRequest(course, topic, shortDescription), e.getMessage());
         }
+    }
+
+    @PostMapping("/drafts/{id}/takeaway")
+    public String saveTakeaway(@PathVariable Long id, @RequestParam(required = false) String takeaway,
+                               Principal principal, RedirectAttributes redirectAttributes) {
+        User student = requireStudent(principal);
+        DuckDraft draft = draftRepository.findByIdAndStudentId(id, student.getId()).orElse(null);
+        if (draft == null || !DuckDraft.ESCALATED.equals(draft.getOutcome()) || draft.getRequestId() == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "That blocker cannot be closed yet.");
+            return "redirect:/student/dashboard";
+        }
+        TutoringRequest request = requestRepository.findById(draft.getRequestId()).orElse(null);
+        if (request == null || !student.getId().equals(request.getStudentId()) || !"RESOLVED".equals(request.getStatus())) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Resolve the session before writing what changed.");
+            return "redirect:/student/dashboard";
+        }
+        try {
+            draft.setTakeaway(requiredTakeaway(takeaway));
+            draftRepository.save(draft);
+            redirectAttributes.addFlashAttribute("successMessage", "Saved what changed.");
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+        return "redirect:/student/dashboard";
     }
 
     @GetMapping("/knowledge")
@@ -223,18 +275,55 @@ public class StudentController {
     @GetMapping("/dashboard")
     public String showDashboard(Model model, Principal principal) {
         User student = requireStudent(principal);
-        List<TutoringRequest> requests = requestRepository.findByStudentId(student.getId());
+        List<DuckDraft> drafts = draftRepository.findByStudentIdOrderByCreatedAtDesc(student.getId());
+        List<Long> requestIds = new ArrayList<>();
+        for (DuckDraft draft : drafts) {
+            if (draft.getRequestId() != null && !requestIds.contains(draft.getRequestId())) {
+                requestIds.add(draft.getRequestId());
+            }
+        }
+        Map<Long, String> requestStatuses = new HashMap<>();
+        if (!requestIds.isEmpty()) {
+            for (TutoringRequest request : requestRepository.findAllById(requestIds)) {
+                requestStatuses.put(request.getId(), request.getStatus());
+            }
+        }
+        model.addAttribute("drafts", drafts);
+        model.addAttribute("requestStatuses", requestStatuses);
+        return "student/dashboard";
+    }
+
+    @GetMapping("/requests")
+    public String showRequests(Model model, Principal principal) {
+        User student = requireStudent(principal);
+        List<TutoringRequest> requests = requestRepository.findByStudentIdOrderByCreationTimestampDesc(student.getId());
+        List<Long> openIds = new ArrayList<>();
+        List<Long> tutorIds = new ArrayList<>();
+        for (TutoringRequest request : requests) {
+            if ("OPEN".equals(request.getStatus())) {
+                openIds.add(request.getId());
+            }
+            if (request.getAssignedTutorId() != null && !tutorIds.contains(request.getAssignedTutorId())) {
+                tutorIds.add(request.getAssignedTutorId());
+            }
+        }
         Map<Long, Long> offerCounts = new HashMap<>();
+        if (!openIds.isEmpty()) {
+            for (Object[] row : offerRepository.countGroupedByRequestId(openIds)) {
+                offerCounts.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+            }
+        }
+        Map<Long, String> namesByTutorId = namesFor(tutorIds);
         Map<Long, String> tutorNames = new HashMap<>();
         List<TutoringRequest> offeredRequests = new ArrayList<>();
         List<TutoringRequest> otherRequests = new ArrayList<>();
         for (TutoringRequest request : requests) {
-            long offers = 0;
+            long offers = offerCounts.getOrDefault(request.getId(), 0L);
             if ("OPEN".equals(request.getStatus())) {
-                offers = offerRepository.countByRequestId(request.getId());
                 offerCounts.put(request.getId(), offers);
             }
-            tutorNames.put(request.getId(), tutorDisplayName(request));
+            String tutorName = request.getAssignedTutorId() == null ? null : namesByTutorId.get(request.getAssignedTutorId());
+            tutorNames.put(request.getId(), tutorName);
             if ("OPEN".equals(request.getStatus()) && offers > 0) {
                 offeredRequests.add(request);
             } else {
@@ -246,59 +335,37 @@ public class StudentController {
         model.addAttribute("otherRequests", otherRequests);
         model.addAttribute("offerCounts", offerCounts);
         model.addAttribute("tutorNames", tutorNames);
-        return "student/dashboard";
+        return "student/requests";
     }
 
     @PostMapping("/requests/{id}/cancel")
     public String cancelRequest(@PathVariable Long id, Principal principal, RedirectAttributes redirectAttributes) {
         User student = requireStudent(principal);
-        TutoringRequest request = ownedRequest(id, student, redirectAttributes);
-        if (request == null) {
-            return "redirect:/student/dashboard";
-        }
-        if ("OPEN".equals(request.getStatus())) {
-            try {
-                economyService.cancelAndRefund(id);
-                meetingOfferService.deleteOffers(id);
-                requestLifecycle.record(id, "OPEN", "CANCELED", student.getUsername());
-                redirectAttributes.addFlashAttribute("successMessage", "Request canceled and the bounty was refunded.");
-            } catch (IllegalStateException | IllegalArgumentException e) {
-                redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
-            }
-            return "redirect:/student/dashboard";
-        }
-        if ("CLAIMED".equals(request.getStatus())) {
-            Long tutorId = request.getAssignedTutorId();
-            try {
-                economyService.cancelClaimed(id);
-                requestLifecycle.record(id, "CLAIMED", "CANCELED", student.getUsername());
-                notificationService.notify(tutorId, student.getPublicName() + " canceled the session.", "/tutor/board");
+        try {
+            String from = economyService.cancel(student, id);
+            if ("CLAIMED".equals(from)) {
                 redirectAttributes.addFlashAttribute("successMessage", "Session canceled and the bounty was refunded.");
-            } catch (IllegalStateException | IllegalArgumentException e) {
-                redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            } else {
+                redirectAttributes.addFlashAttribute("successMessage", "Request canceled and the bounty was refunded.");
             }
-            return "redirect:/student/dashboard";
+        } catch (ObjectOptimisticLockingFailureException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "This request changed. Open it and try again.");
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
         }
-        redirectAttributes.addFlashAttribute("errorMessage", "Only an open or claimed session can be canceled.");
         return "redirect:/student/dashboard";
     }
 
     @PostMapping("/requests/{id}/resolve")
     public String resolveRequest(@PathVariable Long id, Principal principal, RedirectAttributes redirectAttributes) {
         User student = requireStudent(principal);
-        TutoringRequest request = ownedRequest(id, student, redirectAttributes);
-        if (request == null) {
-            return "redirect:/student/dashboard";
-        }
-        if (!"CLAIMED".equals(request.getStatus())) {
-            redirectAttributes.addFlashAttribute("errorMessage", "Only claimed requests can be resolved.");
-            return "redirect:/student/dashboard";
-        }
         try {
-            economyService.resolveAndPayout(id, request.getAssignedTutorId());
-            requestLifecycle.record(id, "CLAIMED", "RESOLVED", student.getUsername());
+            economyService.resolve(student, id);
             redirectAttributes.addFlashAttribute("successMessage", "Session marked resolved. The bounty was paid to your tutor.");
             return "redirect:/student/requests/" + id + "/review";
+        } catch (ObjectOptimisticLockingFailureException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "This request changed. Open it and try again.");
+            return "redirect:/student/dashboard";
         } catch (IllegalStateException | IllegalArgumentException e) {
             redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
             return "redirect:/student/dashboard";
@@ -360,13 +427,21 @@ public class StudentController {
             model.addAttribute("errorMessage", "Score must be between 1 and 5.");
             return "student/leave-review";
         }
+        String trimmedFeedback = blankToNull(feedback);
+        if (trimmedFeedback != null && trimmedFeedback.length() > 1000) {
+            model.addAttribute("request", request);
+            model.addAttribute("score", score);
+            model.addAttribute("feedback", feedback);
+            model.addAttribute("errorMessage", "Keep feedback under 1000 characters.");
+            return "student/leave-review";
+        }
 
         Review review = new Review();
         review.setRequestId(request.getId());
         review.setTutorId(request.getAssignedTutorId());
         review.setStudentId(student.getId());
         review.setScore(score);
-        review.setFeedback(blankToNull(feedback));
+        review.setFeedback(trimmedFeedback);
         economyService.saveReviewAndReward(review);
         redirectAttributes.addFlashAttribute("successMessage", "Thanks for the review. 10 tokens were added to your balance.");
         return "redirect:/student/dashboard";
@@ -431,23 +506,42 @@ public class StudentController {
         return "student/create-request";
     }
 
-    private String duckForm(Model model, DuckDraft draft, String explanation, String errorMessage) {
+    private String duckForm(Model model, DuckDraft draft, String explanation, String takeaway,
+                            String errorMessage, boolean bookingOpen) {
         model.addAttribute("errorMessage", errorMessage);
         model.addAttribute("tutoringRequest", draft.toRequest());
         model.addAttribute("duckNote", draft.getNote());
         model.addAttribute("duckReply", draft.getReply());
-        model.addAttribute("studentExplanation", explanation);
+        model.addAttribute("studentExplanation", explanation != null ? explanation : draft.getAnswer());
+        model.addAttribute("takeaway", takeaway != null ? takeaway : draft.getTakeaway());
         model.addAttribute("duckReady", true);
+        model.addAttribute("bookingOpen", bookingOpen);
         model.addAttribute("courses", Courses.OFFERED);
         return "student/create-request";
     }
 
-    private DuckDraft duckDraft(HttpSession session) {
+    private void rememberBooking(Model model, String meetingMethod, String responseTime, String effort, Integer bounty) {
+        model.addAttribute("preferredMeetingMethod", meetingMethod);
+        model.addAttribute("desiredResponseTime", responseTime);
+        model.addAttribute("expectedEffort", effort);
+        model.addAttribute("bountyValue", bounty);
+    }
+
+    private DuckDraft duckDraft(HttpSession session, User student) {
         Object stored = session.getAttribute(DuckDraft.SESSION_KEY);
-        if (stored instanceof DuckDraft draft) {
-            return draft;
+        if (!(stored instanceof Long id)) {
+            return null;
         }
-        return null;
+        return draftRepository.findByIdAndStudentId(id, student.getId()).orElse(null);
+    }
+
+    private boolean bookingOpen(HttpSession session) {
+        return Boolean.TRUE.equals(session.getAttribute(DuckDraft.BOOKING_KEY));
+    }
+
+    private void clearDuck(HttpSession session) {
+        session.removeAttribute(DuckDraft.SESSION_KEY);
+        session.removeAttribute(DuckDraft.BOOKING_KEY);
     }
 
     private String requiredExplanation(String value) {
@@ -469,27 +563,43 @@ public class StudentController {
     }
 
     private Map<Long, String> publicNames(List<MeetingOffer> offers) {
-        Map<Long, String> names = new HashMap<>();
+        List<Long> tutorIds = new ArrayList<>();
         for (MeetingOffer offer : offers) {
-            if (offer.getTutorId() != null && !names.containsKey(offer.getTutorId())) {
-                userRepository.findById(offer.getTutorId())
-                        .ifPresent(user -> names.put(user.getId(), user.getPublicName()));
+            if (offer.getTutorId() != null && !tutorIds.contains(offer.getTutorId())) {
+                tutorIds.add(offer.getTutorId());
             }
+        }
+        return namesFor(tutorIds);
+    }
+
+    private Map<Long, String> namesFor(List<Long> tutorIds) {
+        Map<Long, String> names = new HashMap<>();
+        if (tutorIds.isEmpty()) {
+            return names;
+        }
+        for (User user : userRepository.findAllById(tutorIds)) {
+            names.put(user.getId(), user.getPublicName());
         }
         return names;
     }
 
-    private TutoringRequest draftRequest(String course, String topic, String description, String meetingMethod,
-                                         String responseTime, String effort, Integer bounty) {
+    private TutoringRequest draftRequest(String course, String topic, String description) {
         TutoringRequest request = new TutoringRequest();
         request.setCourse(course);
         request.setTopic(topic);
         request.setShortDescription(description);
-        request.setPreferredMeetingMethod(meetingMethod);
-        request.setDesiredResponseTime(responseTime);
-        request.setExpectedEffort(effort);
-        request.setBountyValue(bounty == null ? 0 : bounty);
         return request;
+    }
+
+    private String requiredTakeaway(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Write what you understand now.");
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() > 500) {
+            throw new IllegalArgumentException("Keep that entry under 500 characters.");
+        }
+        return trimmed;
     }
 
     private User requireStudent(Principal principal) {

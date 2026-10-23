@@ -1,19 +1,26 @@
 package com.rapidtutor.repository;
 
 import com.rapidtutor.model.TutoringRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
 public interface TutoringRequestRepository extends JpaRepository<TutoringRequest, Long> {
     List<TutoringRequest> findByStatus(String status);
 
-    List<TutoringRequest> findByStudentId(Long studentId);
+    List<TutoringRequest> findByStatusAndAssignedTutorId(String status, Long assignedTutorId);
 
-    long countByStatus(String status);
+    List<TutoringRequest> findByStatusAndDesiredResponseTimeIn(String status, Collection<String> desiredResponseTimes);
+
+    List<TutoringRequest> findByStudentIdOrderByCreationTimestampDesc(Long studentId);
+
+    @Query("SELECT r.status, COUNT(r) FROM TutoringRequest r GROUP BY r.status")
+    List<Object[]> countGroupedByStatus();
 
     long countByStudentIdAndStatus(Long studentId, String status);
 
@@ -21,7 +28,7 @@ public interface TutoringRequestRepository extends JpaRepository<TutoringRequest
     List<Object[]> countGroupedByCourse();
 
     @Query("SELECT r.topic, COUNT(r) FROM TutoringRequest r GROUP BY r.topic ORDER BY COUNT(r) DESC")
-    List<Object[]> countGroupedByTopic();
+    List<Object[]> countGroupedByTopic(Pageable pageable);
 
     @Query("SELECT COUNT(r) FROM TutoringRequest r WHERE r.status = 'RESOLVED' AND r.aiDiagnosticNote IS NOT NULL AND TRIM(r.aiDiagnosticNote) <> ''")
     long countResolvedWithDiagnosticNote();

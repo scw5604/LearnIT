@@ -6,6 +6,7 @@ import com.rapidtutor.repository.KnowledgeArticleRepository;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/knowledge")
@@ -23,6 +24,8 @@ public class KnowledgeAPIController {
         if (canonicalCourse == null || topic == null || topic.isBlank()) {
             return List.of();
         }
-        return knowledgeRepository.findByCourseIgnoreCaseAndTopicContainingIgnoreCase(canonicalCourse, topic.trim());
+        Optional<KnowledgeArticle> article = knowledgeRepository
+                .findFirstByCourseIgnoreCaseAndTopicContainingIgnoreCase(canonicalCourse, topic.trim());
+        return article.map(List::of).orElseGet(List::of);
     }
 }

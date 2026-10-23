@@ -1,13 +1,14 @@
 package com.rapidtutor.service;
 
-import com.rapidtutor.repository.TutoringRequestRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -32,7 +33,6 @@ public class AiDiagnosisService {
             """;
 
     private final RestClient restClient;
-    private final TutoringRequestRepository repository;
 
     @Value("${groq.api.key:mock-key}")
     private String apiKey;
@@ -40,9 +40,13 @@ public class AiDiagnosisService {
     @Value("${groq.model:openai/gpt-oss-20b}")
     private String model;
 
-    public AiDiagnosisService(TutoringRequestRepository repository) {
-        this.repository = repository;
-        this.restClient = RestClient.builder().build();
+    public AiDiagnosisService(RestClient.Builder builder) {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofSeconds(20));
+        this.restClient = builder.requestFactory(requestFactory).build();
     }
 
     /** Returns a diagnostic note. Uses the offline note when Groq is unset or the reply is unusable. */
@@ -71,11 +75,6 @@ public class AiDiagnosisService {
         }
     }
 
-    @Async
-    public void generateDiagnosticScaffold(Long requestId, String course, String topic, String description) {
-        saveDiagnosis(requestId, prepareNote(course, topic, description));
-    }
-
     private String askGroq(String systemPrompt, String studentRequest) {
         Map<String, Object> requestBody = Map.of(
                 "model", model,
@@ -94,12 +93,5 @@ public class AiDiagnosisService {
                 .body(Map.class);
 
         return GroqResponseParser.extractMessageContent(response);
-    }
-
-    private void saveDiagnosis(Long requestId, String text) {
-        repository.findById(requestId).ifPresent(req -> {
-            req.setAiDiagnosticNote(text);
-            repository.save(req);
-        });
     }
 }

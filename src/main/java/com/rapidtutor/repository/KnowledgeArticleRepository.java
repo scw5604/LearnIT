@@ -7,10 +7,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface KnowledgeArticleRepository extends JpaRepository<KnowledgeArticle, Long> {
     List<KnowledgeArticle> findByCourseIgnoreCaseAndTopicContainingIgnoreCase(String course, String topic);
+
+    Optional<KnowledgeArticle> findFirstByCourseIgnoreCaseAndTopicContainingIgnoreCase(String course, String topic);
 
     List<KnowledgeArticle> findByCourseIgnoreCaseAndTopicContainingIgnoreCaseOrderByTopicAsc(String course, String topic);
 
@@ -24,8 +27,6 @@ public interface KnowledgeArticleRepository extends JpaRepository<KnowledgeArtic
     @Transactional
     @Query("delete from KnowledgeArticle article where article.kind = :kind")
     void deleteByKind(String kind);
-
-    long countByCourse(String course);
 
     long countByCourseAndTopic(String course, String topic);
 }

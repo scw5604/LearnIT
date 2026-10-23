@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('LearnIT · Post a request')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Talk it through')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
 
     <main class="rt-main">
         <div class="container">
-            <a class="rt-back" th:href="@{/student/dashboard}">Back to requests</a>
+            <a class="rt-back" th:href="@{/student/dashboard}">Back to blockers</a>
             <div class="row justify-content-center">
                 <div class="col-lg-8">
                     <div class="rt-panel">
-                        <h1>Post a request</h1>
+                        <h1>Talk it through</h1>
 
                         <div th:replace="~{fragments/alerts :: alerts}"></div>
 
@@ -19,12 +19,6 @@
                             <p class="rt-kicker" th:text="${tutoringRequest.course}">HCDD 412</p>
                             <h2 th:text="${tutoringRequest.topic}">Topic</h2>
                             <p th:text="${tutoringRequest.shortDescription}">Description</p>
-                            <div class="rt-meta">
-                                <span th:text="${tutoringRequest.preferredMeetingMethod}">Zoom</span>
-                                <span th:text="${tutoringRequest.desiredResponseTime}">Today</span>
-                                <span th:text="${tutoringRequest.expectedEffort}">15 mins</span>
-                                <span th:text="${(tutoringRequest.bountyValue != null ? tutoringRequest.bountyValue : 0) + ' tokens'}">0 tokens</span>
-                            </div>
 
                             <div th:replace="~{fragments/diagnostic-note :: scaffold(${duckNote}, 'duck')}"></div>
                             <p class="mt-3 mb-0">Answer the question above, then walk it through.</p>
@@ -38,8 +32,55 @@
                                     <textarea id="studentExplanation" name="studentExplanation" class="form-control" rows="4" required
                                               th:text="${studentExplanation}">I tried...</textarea>
                                 </div>
+                                <div class="mb-4">
+                                    <label class="form-label" for="takeaway">What changed</label>
+                                    <textarea id="takeaway" name="takeaway" class="form-control" rows="2" maxlength="500"
+                                              placeholder="What do you understand now?"
+                                              th:text="${takeaway}"></textarea>
+                                </div>
                                 <button type="submit" class="btn btn-rt-primary w-100 mb-2" th:formaction="@{/student/requests/duck/reply}">Walk it through</button>
-                                <button type="submit" class="btn btn-rt-ghost w-100 mb-2">I'm still stuck</button>
+                                <div th:if="${bookingOpen}">
+                                    <div class="row mb-1">
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="meeting">Meeting method</label>
+                                            <select id="meeting" name="preferredMeetingMethod" class="form-select" required>
+                                                <option value="" disabled th:selected="${preferredMeetingMethod == null}">Select method</option>
+                                                <option value="Zoom" th:selected="${preferredMeetingMethod == 'Zoom'}">Zoom</option>
+                                                <option value="Teams" th:selected="${preferredMeetingMethod == 'Teams'}">Teams</option>
+                                                <option value="Phone Call" th:selected="${preferredMeetingMethod == 'Phone Call'}">Phone call</option>
+                                                <option value="In-Person" th:selected="${preferredMeetingMethod == 'In-Person'}">In-person</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="urgency">Response time</label>
+                                            <select id="urgency" name="desiredResponseTime" class="form-select" required aria-describedby="responseHint">
+                                                <option value="" disabled th:selected="${desiredResponseTime == null}">Select urgency</option>
+                                                <option value="ASAP" th:selected="${desiredResponseTime == 'ASAP'}">ASAP</option>
+                                                <option value="Within 2 hours" th:selected="${desiredResponseTime == 'Within 2 hours'}">Within 2 hours</option>
+                                                <option value="Today" th:selected="${desiredResponseTime == 'Today'}">Today</option>
+                                                <option value="Not urgent" th:selected="${desiredResponseTime == 'Not urgent'}">Not urgent</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="effort">Session length</label>
+                                            <select id="effort" name="expectedEffort" class="form-select" required>
+                                                <option value="" disabled th:selected="${expectedEffort == null}">Select duration</option>
+                                                <option value="Quick explanation (10-15 mins)" th:selected="${expectedEffort == 'Quick explanation (10-15 mins)'}">Quick explanation (10-15 mins)</option>
+                                                <option value="Concept explanation (20-30 mins)" th:selected="${expectedEffort == 'Concept explanation (20-30 mins)'}">Concept explanation (20-30 mins)</option>
+                                                <option value="Extended help (30-60 mins)" th:selected="${expectedEffort == 'Extended help (30-60 mins)'}">Extended help (30-60 mins)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p class="form-text mt-2" id="responseHint">ASAP closes after one hour, Within 2 hours after two hours, Today at the start of the next day, and Not urgent stays open.</p>
+                                    <div class="mb-4 mt-3">
+                                        <label class="form-label" for="bounty">Priority bounty (tokens)</label>
+                                        <input id="bounty" name="bountyValue" type="number" class="form-control" min="0" max="50"
+                                               th:value="${bountyValue != null ? bountyValue : 0}">
+                                    </div>
+                                    <button type="submit" class="btn btn-rt-ghost w-100 mb-2">Post request</button>
+                                </div>
+                                <button type="submit" class="btn btn-rt-ghost w-100 mb-2" th:unless="${bookingOpen}"
+                                        th:formaction="@{/student/requests/duck/book}">I'm still stuck</button>
                                 <button type="submit" class="btn btn-rt-ghost w-100" th:formaction="@{/student/requests/duck/solved}">I figured it out</button>
                             </form>
                             <p class="text-center mt-3 mb-0">
@@ -61,54 +102,16 @@
                                 <div id="deflectionResults" class="mt-2"></div>
                             </div>
 
-                            <div class="mb-3">
+                            <div class="mb-4">
                                 <label class="form-label" for="description">Problem description</label>
-                                <textarea id="description" class="form-control" th:field="*{shortDescription}" rows="4" required placeholder="Describe the concept you are stuck on."></textarea>
-                            </div>
-
-                            <div class="row mb-1">
-                                <div class="col-md-4">
-                                    <label class="form-label" for="meeting">Meeting method</label>
-                                    <select id="meeting" class="form-select" th:field="*{preferredMeetingMethod}" required>
-                                        <option value="" disabled selected>Select method</option>
-                                        <option value="Zoom">Zoom</option>
-                                        <option value="Teams">Teams</option>
-                                        <option value="Phone Call">Phone call</option>
-                                        <option value="In-Person">In-person</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label" for="urgency">Response time</label>
-                                    <select id="urgency" class="form-select" th:field="*{desiredResponseTime}" required aria-describedby="responseHint">
-                                        <option value="" disabled selected>Select urgency</option>
-                                        <option value="ASAP">ASAP</option>
-                                        <option value="Within 2 hours">Within 2 hours</option>
-                                        <option value="Today">Today</option>
-                                        <option value="Not urgent">Not urgent</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label" for="effort">Session length</label>
-                                    <select id="effort" class="form-select" th:field="*{expectedEffort}" required>
-                                        <option value="" disabled selected>Select duration</option>
-                                        <option value="Quick explanation (10-15 mins)">Quick explanation (10-15 mins)</option>
-                                        <option value="Concept explanation (20-30 mins)">Concept explanation (20-30 mins)</option>
-                                        <option value="Extended help (30-60 mins)">Extended help (30-60 mins)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <p class="form-text mt-2" id="responseHint">ASAP closes after one hour, Within 2 hours after two hours, Today at the start of the next day, and Not urgent stays open.</p>
-
-                            <div class="mb-4 mt-3">
-                                <label class="form-label" for="bounty">Priority bounty (tokens)</label>
-                                <input id="bounty" type="number" class="form-control" th:field="*{bountyValue}" min="0" max="50" value="0">
+                                <textarea id="description" class="form-control" th:field="*{shortDescription}" rows="4" required maxlength="2000" placeholder="Describe the concept you are stuck on."></textarea>
                             </div>
 
                             <button type="submit" class="btn btn-rt-primary w-100">Talk it through</button>
                         </form>
 
                         <p class="text-muted small mt-4 mb-0" th:unless="${duckReady}">
-                            Response times are not guaranteed. Do not include passwords, grades, a student ID, or a request to complete graded work.
+                            Do not include passwords, grades, a student ID, or a request to complete graded work.
                         </p>
                     </div>
                 </div>
@@ -171,7 +174,11 @@
     }
 
     if (topicInput && courseInput) {
-        topicInput.addEventListener('keyup', searchKnowledge);
+        let searchTimer;
+        topicInput.addEventListener('keyup', function () {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(searchKnowledge, 300);
+        });
         courseInput.addEventListener('change', searchKnowledge);
     }
 </script>

@@ -22,15 +22,22 @@ public final class RequestFields {
     private RequestFields() {
     }
 
-    /** Copies only the fields a student is allowed to set. */
-    public static TutoringRequest copy(String course, String topic, String description, String meetingMethod,
-                                       String responseTime, String effort, Integer bounty) {
+    /** Course, topic, and description. Booking fields are chosen later. */
+    public static TutoringRequest blocker(String course, String topic, String description) {
         String canonical = Courses.canonical(course);
         if (canonical == null) {
             throw new IllegalArgumentException("Choose one of the listed courses.");
         }
-        String cleanTopic = required(topic, "Enter a topic.", 120);
-        String cleanDescription = required(description, "Describe the concept you are stuck on.", 2000);
+        TutoringRequest request = new TutoringRequest();
+        request.setCourse(canonical);
+        request.setTopic(required(topic, "Enter a topic.", 120));
+        request.setShortDescription(required(description, "Describe the concept you are stuck on.", 2000));
+        return request;
+    }
+
+    /** Meeting, urgency, length, and bounty. Applied when the student is still stuck. */
+    public static void booking(TutoringRequest request, String meetingMethod, String responseTime,
+                               String effort, Integer bounty) {
         if (!MEETING_SET.contains(meetingMethod)) {
             throw new IllegalArgumentException("Choose a meeting method.");
         }
@@ -40,21 +47,14 @@ public final class RequestFields {
         if (!EFFORT_SET.contains(effort)) {
             throw new IllegalArgumentException("Choose a session length.");
         }
-
         int bountyAmount = bounty == null ? 0 : bounty;
         if (bountyAmount < 0 || bountyAmount > 50) {
             throw new IllegalArgumentException("Bounty must be between 0 and 50 tokens.");
         }
-
-        TutoringRequest request = new TutoringRequest();
-        request.setCourse(canonical);
-        request.setTopic(cleanTopic);
-        request.setShortDescription(cleanDescription);
         request.setPreferredMeetingMethod(meetingMethod);
         request.setDesiredResponseTime(responseTime);
         request.setExpectedEffort(effort);
         request.setBountyValue(bountyAmount);
-        return request;
     }
 
     private static String required(String value, String message, int max) {

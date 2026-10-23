@@ -10,10 +10,9 @@ import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.EconomyService;
 import com.rapidtutor.service.MeetingOfferService;
-import com.rapidtutor.service.NotificationService;
-import com.rapidtutor.service.RequestLifecycle;
 import com.rapidtutor.service.SubjectMatcher;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -25,10 +24,8 @@ import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Controller
 @RequestMapping("/tutor")
@@ -41,14 +38,11 @@ public class TutorController {
     private final MeetingOfferService meetingOfferService;
     private final RequestEventRepository eventRepository;
     private final EconomyService economyService;
-    private final RequestLifecycle requestLifecycle;
-    private final NotificationService notificationService;
 
     public TutorController(TutoringRequestRepository requestRepository, UserRepository userRepository,
                            ReviewRepository reviewRepository, MeetingOfferRepository offerRepository,
                            MeetingOfferService meetingOfferService,
-                           RequestEventRepository eventRepository, EconomyService economyService,
-                           RequestLifecycle requestLifecycle, NotificationService notificationService) {
+                           RequestEventRepository eventRepository, EconomyService economyService) {
         this.requestRepository = requestRepository;
         this.userRepository = userRepository;
         this.reviewRepository = reviewRepository;
@@ -56,8 +50,6 @@ public class TutorController {
         this.meetingOfferService = meetingOfferService;
         this.eventRepository = eventRepository;
         this.economyService = economyService;
-        this.requestLifecycle = requestLifecycle;
-        this.notificationService = notificationService;
     }
 
     @GetMapping("/board")
@@ -67,36 +59,26 @@ public class TutorController {
         List<TutoringRequest> openRequests = requestRepository.findByStatus("OPEN").stream()
                 .filter(req -> SubjectMatcher.covers(tutor.getSubjects(), req.getCourse()))
                 .toList();
-        List<TutoringRequest> myClaimedRequests = requestRepository.findByStatus("CLAIMED").stream()
-                .filter(req -> tutor.getId().equals(req.getAssignedTutorId()))
-                .toList();
+        List<TutoringRequest> myClaimedRequests =
+                requestRepository.findByStatusAndAssignedTutorId("CLAIMED", tutor.getId());
 
-        Set<Long> myOfferRequestIds = new HashSet<>();
+        Map<Long, List<MeetingOffer>> offersByRequest = new HashMap<>();
         for (MeetingOffer offer : offerRepository.findByTutorId(tutor.getId())) {
-            myOfferRequestIds.add(offer.getRequestId());
+            offersByRequest.computeIfAbsent(offer.getRequestId(), id -> new ArrayList<>()).add(offer);
         }
         List<TutoringRequest> myOfferedRequests = new ArrayList<>();
         List<TutoringRequest> openWithoutMine = new ArrayList<>();
         for (TutoringRequest request : openRequests) {
-            if (myOfferRequestIds.contains(request.getId())) {
+            if (offersByRequest.containsKey(request.getId())) {
                 myOfferedRequests.add(request);
             } else {
                 openWithoutMine.add(request);
             }
         }
 
-        Map<Long, List<MeetingOffer>> offersByRequest = new HashMap<>();
-        List<MeetingOffer> allOffers = new ArrayList<>();
-        for (TutoringRequest request : openRequests) {
-            List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(request.getId());
-            offersByRequest.put(request.getId(), offers);
-            allOffers.addAll(offers);
-        }
-
         model.addAttribute("requests", openWithoutMine);
         model.addAttribute("myOfferedRequests", myOfferedRequests);
         model.addAttribute("offersByRequest", offersByRequest);
-        model.addAttribute("tutorNamesById", publicNames(allOffers));
         model.addAttribute("myClaimedRequests", myClaimedRequests);
         model.addAttribute("tutorSubjects", tutor.getSubjects());
         model.addAttribute("myAverageScore", reviewRepository.getAverageScoreByTutorId(tutor.getId()));
@@ -145,17 +127,11 @@ public class TutorController {
     @PostMapping("/requests/{id}/cancel")
     public String cancelClaimed(@PathVariable Long id, Principal principal, RedirectAttributes redirectAttributes) {
         User tutor = requireTutor(principal);
-        TutoringRequest request = requestRepository.findById(id).orElse(null);
-        if (request == null || !tutor.getId().equals(request.getAssignedTutorId())) {
-            redirectAttributes.addFlashAttribute("errorMessage", "You can only cancel a session assigned to you.");
-            return "redirect:/tutor/board";
-        }
         try {
-            Long studentId = request.getStudentId();
-            economyService.cancelClaimed(id);
-            requestLifecycle.record(id, "CLAIMED", "CANCELED", tutor.getUsername());
-            notificationService.notify(studentId, tutor.getPublicName() + " canceled the session.", "/student/dashboard");
+            economyService.cancelClaimedByTutor(tutor, id);
             redirectAttributes.addFlashAttribute("successMessage", "Session canceled and the bounty was refunded.");
+        } catch (ObjectOptimisticLockingFailureException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "This request changed. Open it and try again.");
         } catch (IllegalStateException | IllegalArgumentException e) {
             redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
         }
@@ -199,12 +175,18 @@ public class TutorController {
     }
 
     private Map<Long, String> publicNames(List<MeetingOffer> offers) {
-        Map<Long, String> names = new HashMap<>();
+        List<Long> tutorIds = new ArrayList<>();
         for (MeetingOffer offer : offers) {
-            if (offer.getTutorId() != null && !names.containsKey(offer.getTutorId())) {
-                userRepository.findById(offer.getTutorId())
-                        .ifPresent(user -> names.put(user.getId(), user.getPublicName()));
+            if (offer.getTutorId() != null && !tutorIds.contains(offer.getTutorId())) {
+                tutorIds.add(offer.getTutorId());
             }
+        }
+        Map<Long, String> names = new HashMap<>();
+        if (tutorIds.isEmpty()) {
+            return names;
+        }
+        for (User user : userRepository.findAllById(tutorIds)) {
+            names.put(user.getId(), user.getPublicName());
         }
         return names;
     }

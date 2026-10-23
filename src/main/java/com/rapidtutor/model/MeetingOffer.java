@@ -4,13 +4,17 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"request_id", "tutor_id"}))
+@Table(
+        uniqueConstraints = @UniqueConstraint(columnNames = {"request_id", "tutor_id"}),
+        indexes = @Index(columnList = "tutor_id")
+)
 public class MeetingOffer {
 
     @Id

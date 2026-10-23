@@ -5,6 +5,7 @@ import com.rapidtutor.model.Courses;
 import com.rapidtutor.model.User;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.AccountService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -127,17 +128,31 @@ public class AccountController {
             model.addAttribute("recoveryCode", created.recoveryCode());
             model.addAttribute("username", created.user().getUsername());
             return "recovery-code";
+        } catch (DataIntegrityViolationException e) {
+            return rejectedAccount(accountForm, model, tutor, duplicateAccountMessage(accountForm));
         } catch (IllegalArgumentException e) {
-            accountForm.setPassword(null);
-            accountForm.setConfirmPassword(null);
-            model.addAttribute("accountForm", accountForm);
-            model.addAttribute("errorMessage", e.getMessage());
-            if (tutor) {
-                model.addAttribute("courses", Courses.OFFERED);
-                return "apply-tutor";
-            }
-            return "register";
+            return rejectedAccount(accountForm, model, tutor, e.getMessage());
         }
+    }
+
+    private String rejectedAccount(AccountForm accountForm, Model model, boolean tutor, String message) {
+        accountForm.setPassword(null);
+        accountForm.setConfirmPassword(null);
+        model.addAttribute("accountForm", accountForm);
+        model.addAttribute("errorMessage", message);
+        if (tutor) {
+            model.addAttribute("courses", Courses.OFFERED);
+            return "apply-tutor";
+        }
+        return "register";
+    }
+
+    private String duplicateAccountMessage(AccountForm accountForm) {
+        String username = accountForm.getUsername() == null ? "" : accountForm.getUsername().trim();
+        if (userRepository.findByUsernameIgnoreCase(username) != null) {
+            return "That username is already taken.";
+        }
+        return "That email is already registered.";
     }
 
     private User current(Principal principal) {

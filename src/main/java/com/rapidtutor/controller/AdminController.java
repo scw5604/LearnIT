@@ -7,6 +7,8 @@ import com.rapidtutor.repository.ReviewRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.AccountService;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +19,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 @RequestMapping("/admin")
@@ -77,6 +81,11 @@ public class AdminController {
                     "Administrator " + created.user().getUsername() + " was created. Recovery code: "
                             + created.recoveryCode() + ". Share the temporary password and this code. It will not be shown again.");
             model.addAttribute("accountForm", new AccountForm());
+        } catch (DataIntegrityViolationException e) {
+            accountForm.setPassword(null);
+            accountForm.setConfirmPassword(null);
+            model.addAttribute("accountForm", accountForm);
+            model.addAttribute("errorMessage", duplicateAccountMessage(accountForm));
         } catch (IllegalArgumentException e) {
             accountForm.setPassword(null);
             accountForm.setConfirmPassword(null);
@@ -89,11 +98,11 @@ public class AdminController {
 
     @GetMapping("/insights")
     public String insights(Model model) {
-        long resolved = requestRepository.countByStatus("RESOLVED");
-        model.addAttribute("resolvedCount", resolved);
+        Map<String, Long> counts = statusCounts();
+        model.addAttribute("resolvedCount", countOf(counts, "RESOLVED"));
         model.addAttribute("resolvedWithNoteCount", requestRepository.countResolvedWithDiagnosticNote());
         List<LabelCount> courseCounts = toLabelCounts(requestRepository.countGroupedByCourse());
-        List<LabelCount> topicCounts = toLabelCounts(requestRepository.countGroupedByTopic());
+        List<LabelCount> topicCounts = toLabelCounts(requestRepository.countGroupedByTopic(PageRequest.of(0, 10)));
         model.addAttribute("courseCounts", courseCounts);
         model.addAttribute("topicCounts", topicCounts);
         model.addAttribute("courseMax", maxCount(courseCounts));
@@ -105,13 +114,36 @@ public class AdminController {
     }
 
     private void fillOverview(Model model) {
+        Map<String, Long> counts = statusCounts();
         model.addAttribute("users", userRepository.findAll());
         model.addAttribute("applicants", userRepository.findByRoleOrderByUsernameAsc("APPLICANT"));
-        model.addAttribute("openCount", requestRepository.countByStatus("OPEN"));
-        model.addAttribute("claimedCount", requestRepository.countByStatus("CLAIMED"));
-        model.addAttribute("resolvedCount", requestRepository.countByStatus("RESOLVED"));
-        model.addAttribute("canceledCount", requestRepository.countByStatus("CANCELED"));
-        model.addAttribute("expiredCount", requestRepository.countByStatus("EXPIRED"));
+        model.addAttribute("openCount", countOf(counts, "OPEN"));
+        model.addAttribute("claimedCount", countOf(counts, "CLAIMED"));
+        model.addAttribute("resolvedCount", countOf(counts, "RESOLVED"));
+        model.addAttribute("canceledCount", countOf(counts, "CANCELED"));
+        model.addAttribute("expiredCount", countOf(counts, "EXPIRED"));
+    }
+
+    private Map<String, Long> statusCounts() {
+        Map<String, Long> counts = new HashMap<>();
+        for (Object[] row : requestRepository.countGroupedByStatus()) {
+            if (row[0] != null) {
+                counts.put(row[0].toString(), ((Number) row[1]).longValue());
+            }
+        }
+        return counts;
+    }
+
+    private long countOf(Map<String, Long> counts, String status) {
+        return counts.getOrDefault(status, 0L);
+    }
+
+    private String duplicateAccountMessage(AccountForm accountForm) {
+        String username = accountForm.getUsername() == null ? "" : accountForm.getUsername().trim();
+        if (userRepository.findByUsernameIgnoreCase(username) != null) {
+            return "That username is already taken.";
+        }
+        return "That email is already registered.";
     }
 
     private long maxCount(List<LabelCount> counts) {
@@ -150,24 +182,42 @@ public class AdminController {
     }
 
     private List<ReviewRow> recentReviews() {
+        List<Review> reviews = reviewRepository.findTop20ByOrderByCreatedAtDesc();
+        Map<Long, String> names = tutorNames(reviews.stream().map(Review::getTutorId).toList());
         List<ReviewRow> rows = new ArrayList<>();
-        for (Review review : reviewRepository.findTop20ByOrderByCreatedAtDesc()) {
-            String tutor = userRepository.findById(review.getTutorId()).map(User::getPublicName).orElse("Unknown");
+        for (Review review : reviews) {
+            String tutor = names.getOrDefault(review.getTutorId(), "Unknown");
             rows.add(new ReviewRow(tutor, review.getScore(), review.getFeedback(), review.getCreatedAt()));
         }
         return rows;
     }
 
     private List<TutorScore> tutorScores() {
+        List<Object[]> rows = reviewRepository.summarizeByTutor();
+        List<Long> tutorIds = new ArrayList<>();
+        for (Object[] row : rows) {
+            tutorIds.add(((Number) row[0]).longValue());
+        }
+        Map<Long, String> names = tutorNames(tutorIds);
         List<TutorScore> scores = new ArrayList<>();
-        for (Object[] row : reviewRepository.summarizeByTutor()) {
+        for (Object[] row : rows) {
             Long tutorId = ((Number) row[0]).longValue();
             double average = ((Number) row[1]).doubleValue();
             long reviews = ((Number) row[2]).longValue();
-            String username = userRepository.findById(tutorId).map(User::getPublicName).orElse("Tutor " + tutorId);
-            scores.add(new TutorScore(username, average, reviews));
+            scores.add(new TutorScore(names.getOrDefault(tutorId, "Tutor " + tutorId), average, reviews));
         }
         return scores;
+    }
+
+    private Map<Long, String> tutorNames(List<Long> tutorIds) {
+        Map<Long, String> names = new HashMap<>();
+        if (tutorIds.isEmpty()) {
+            return names;
+        }
+        for (User user : userRepository.findAllById(tutorIds)) {
+            names.put(user.getId(), user.getPublicName());
+        }
+        return names;
     }
 
     public record LabelCount(String label, long count) {
