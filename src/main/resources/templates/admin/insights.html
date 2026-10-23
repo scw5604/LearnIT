@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('RapidTutor · Insights')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Insights')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -33,7 +33,14 @@
                             </tr>
                             <tr th:each="row : ${courseCounts}">
                                 <td th:text="${row.label}">HCDD 412</td>
-                                <td th:text="${row.count}">1</td>
+                                <td>
+                                    <div class="rt-count">
+                                        <span th:text="${row.count}">1</span>
+                                        <span class="rt-bar-track">
+                                            <span class="rt-bar" th:if="${row.count > 0}" th:style="|width: ${courseMax == 0 ? 0 : (row.count * 100 / courseMax)}%|"></span>
+                                        </span>
+                                    </div>
+                                </td>
                             </tr>
                             </tbody>
                         </table>
@@ -52,7 +59,14 @@
                             </tr>
                             <tr th:each="row : ${topicCounts}">
                                 <td th:text="${row.label}">UML</td>
-                                <td th:text="${row.count}">1</td>
+                                <td>
+                                    <div class="rt-count">
+                                        <span th:text="${row.count}">1</span>
+                                        <span class="rt-bar-track">
+                                            <span class="rt-bar" th:if="${row.count > 0}" th:style="|width: ${topicMax == 0 ? 0 : (row.count * 100 / topicMax)}%|"></span>
+                                        </span>
+                                    </div>
+                                </td>
                             </tr>
                             </tbody>
                         </table>

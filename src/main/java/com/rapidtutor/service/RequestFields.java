@@ -41,6 +41,11 @@ public final class RequestFields {
             throw new IllegalArgumentException("Choose a session length.");
         }
 
+        int bountyAmount = bounty == null ? 0 : bounty;
+        if (bountyAmount < 0 || bountyAmount > 50) {
+            throw new IllegalArgumentException("Bounty must be between 0 and 50 tokens.");
+        }
+
         TutoringRequest request = new TutoringRequest();
         request.setCourse(canonical);
         request.setTopic(cleanTopic);
@@ -48,7 +53,7 @@ public final class RequestFields {
         request.setPreferredMeetingMethod(meetingMethod);
         request.setDesiredResponseTime(responseTime);
         request.setExpectedEffort(effort);
-        request.setBountyValue(bounty == null ? 0 : bounty);
+        request.setBountyValue(bountyAmount);
         return request;
     }
 

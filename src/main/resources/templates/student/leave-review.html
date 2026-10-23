@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('RapidTutor · Review')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Review')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -14,6 +14,7 @@
                         <p class="rt-kicker" th:text="${request.course}">HCDD 412</p>
                         <h1>Rate this session</h1>
                         <p class="text-muted" th:text="${request.topic}">Topic</p>
+                        <p>Submitting this review adds 10 tokens.</p>
 
                         <div th:replace="~{fragments/alerts :: alerts}"></div>
 

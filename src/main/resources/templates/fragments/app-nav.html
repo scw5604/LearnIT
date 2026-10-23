@@ -3,11 +3,11 @@
 <body>
 <nav th:fragment="navbar" class="navbar navbar-expand-lg rt-nav">
     <div class="container">
-        <a class="navbar-brand" sec:authorize="hasRole('STUDENT')" th:href="@{/student/dashboard}">RapidTutor</a>
-        <a class="navbar-brand" sec:authorize="hasRole('TUTOR')" th:href="@{/tutor/board}">RapidTutor</a>
-        <a class="navbar-brand" sec:authorize="hasRole('ADMIN')" th:href="@{/admin}">RapidTutor</a>
-        <a class="navbar-brand" sec:authorize="hasAnyRole('APPLICANT', 'DECLINED')" th:href="@{/apply/status}">RapidTutor</a>
-        <a class="navbar-brand" sec:authorize="!isAuthenticated()" th:href="@{/login}">RapidTutor</a>
+        <a class="navbar-brand" sec:authorize="hasRole('STUDENT')" th:href="@{/student/dashboard}">LearnIT</a>
+        <a class="navbar-brand" sec:authorize="hasRole('TUTOR')" th:href="@{/tutor/board}">LearnIT</a>
+        <a class="navbar-brand" sec:authorize="hasRole('ADMIN')" th:href="@{/admin}">LearnIT</a>
+        <a class="navbar-brand" sec:authorize="hasAnyRole('APPLICANT', 'DECLINED')" th:href="@{/apply/status}">LearnIT</a>
+        <a class="navbar-brand" sec:authorize="!isAuthenticated()" th:href="@{/login}">LearnIT</a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#rtNav" aria-controls="rtNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
@@ -17,7 +17,11 @@
             <ul class="navbar-nav me-auto">
                 <li class="nav-item" sec:authorize="hasRole('STUDENT')">
                     <a class="nav-link" th:href="@{/student/dashboard}"
-                       th:classappend="${#strings.startsWith(currentPath, '/student')} ? 'active'">Requests</a>
+                       th:classappend="${#strings.startsWith(currentPath, '/student') and !#strings.startsWith(currentPath, '/student/knowledge')} ? 'active'">Requests</a>
+                </li>
+                <li class="nav-item" sec:authorize="hasRole('STUDENT')">
+                    <a class="nav-link" th:href="@{/student/knowledge}"
+                       th:classappend="${#strings.startsWith(currentPath, '/student/knowledge')} ? 'active'">Databank</a>
                 </li>
                 <li class="nav-item" sec:authorize="hasRole('TUTOR')">
                     <a class="nav-link" th:href="@{/tutor/board}"
@@ -35,7 +39,7 @@
                     <a class="nav-link" th:href="@{/notifications}"
                        th:classappend="${#strings.startsWith(currentPath, '/notifications')} ? 'active'">
                         Notifications
-                        <span th:if="${unreadCount > 0}" th:text="${unreadCount}">1</span>
+                        <span class="rt-count-pill" th:if="${unreadCount > 0}" th:text="${unreadCount}">1</span>
                     </a>
                 </li>
                 <li class="nav-item" sec:authorize="hasAnyRole('APPLICANT', 'DECLINED')">
@@ -46,11 +50,21 @@
                 <span class="rt-token-pill" sec:authorize="hasAnyRole('STUDENT', 'TUTOR')" th:if="${currentUser != null}">
                     <span th:text="${currentUser.tokenBalance != null ? currentUser.tokenBalance : 0}">0</span> tokens
                 </span>
-                <span class="rt-nav-user" sec:authentication="name">username</span>
-                <a class="btn btn-sm btn-rt-ghost" sec:authorize="isAuthenticated()" th:href="@{/account/password}">Password</a>
-                <form th:action="@{/logout}" method="post" class="m-0">
-                    <button type="submit" class="btn btn-sm btn-rt-ghost">Sign out</button>
-                </form>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-rt-ghost dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account">
+                        <span sec:authentication="name">username</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" th:href="@{/account/password}">Password</a>
+                        </li>
+                        <li>
+                            <form th:action="@{/logout}" method="post" class="m-0">
+                                <button type="submit" class="dropdown-item">Sign out</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="status(status)">
+    <span class="rt-badge rt-badge-open" th:if="${status == 'OPEN'}">Open</span>
+    <span class="rt-badge rt-badge-claimed" th:if="${status == 'CLAIMED'}">Claimed</span>
+    <span class="rt-badge rt-badge-resolved" th:if="${status == 'RESOLVED'}">Resolved</span>
+    <span class="rt-badge rt-badge-canceled" th:if="${status == 'CANCELED'}">Canceled</span>
+    <span class="rt-badge rt-badge-expired" th:if="${status == 'EXPIRED'}">Expired</span>
+</th:block>
+</body>
+</html>

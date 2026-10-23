@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('RapidTutor · Tutor board')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Tutor board')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -19,7 +19,6 @@
                         <strong th:text="${#numbers.formatDecimal(myAverageScore, 1, 1)}">5.0</strong>
                         out of 5.
                     </p>
-                    <p th:if="${myAverageScore == null}">You do not have any ratings yet.</p>
                 </div>
             </div>
 
@@ -29,11 +28,13 @@
             <div class="row g-3 mb-5">
                 <div class="col-md-6" th:each="req : ${myClaimedRequests}">
                     <article class="rt-card rt-request-card h-100">
-                        <p class="rt-kicker mb-0" th:text="${req.course}">Course</p>
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <p class="rt-kicker mb-0" th:text="${req.course}">Course</p>
+                            <th:block th:replace="~{fragments/status :: status('CLAIMED')}"></th:block>
+                        </div>
                         <h2 th:text="${req.topic}">Topic</h2>
                         <p th:text="${req.shortDescription}">Description</p>
                         <div class="rt-meta">
-                            <span class="rt-badge rt-badge-claimed">Claimed</span>
                             <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' tokens'}">0 tokens</span>
                         </div>
                         <div class="rt-actions">
@@ -45,7 +46,44 @@
                     </article>
                 </div>
                 <div class="col-12" th:if="${#lists.isEmpty(myClaimedRequests)}">
-                    <p class="text-muted">You have no active sessions.</p>
+                    <div class="rt-card">
+                        <p class="rt-empty">You have no active sessions.</p>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="h5 mb-3" th:if="${myOfferedRequests != null and !#lists.isEmpty(myOfferedRequests)}">Time offered</h2>
+            <div class="row g-3 mb-5" th:if="${myOfferedRequests != null and !#lists.isEmpty(myOfferedRequests)}">
+                <div class="col-md-6" th:each="req : ${myOfferedRequests}">
+                    <article class="rt-card rt-request-card h-100">
+                        <div class="d-flex justify-content-between gap-2">
+                            <p class="rt-kicker mb-0" th:text="${req.course}">Course</p>
+                            <span class="text-muted small" th:text="${#temporals.format(req.creationTimestamp, 'MMM dd, h:mm a')}">Time</span>
+                        </div>
+                        <h2 th:text="${req.topic}">Topic</h2>
+                        <p th:text="${req.shortDescription}">Description</p>
+                        <div class="rt-meta">
+                            <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' token bounty'}">0 token bounty</span>
+                            <span th:text="${req.preferredMeetingMethod}">Zoom</span>
+                            <span th:text="${req.desiredResponseTime}">Today</span>
+                        </div>
+                        <div th:if="${offersByRequest.get(req.id) != null}">
+                            <div class="rt-own-offer" th:each="offer : ${offersByRequest.get(req.id)}"
+                                 th:if="${currentUser != null and offer.tutorId == currentUser.id}">
+                                <span>
+                                    You offered
+                                    <span th:text="${#temporals.format(offer.offeredTime, 'MMM d, h:mm a')}">Oct 14, 4:00 PM</span>
+                                </span>
+                                <form class="m-0"
+                                      th:action="@{/tutor/requests/{id}/offers/{offerId}/withdraw(id=${req.id}, offerId=${offer.id})}" method="post">
+                                    <button type="submit" class="btn btn-sm btn-rt-ghost">Withdraw</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="rt-actions">
+                            <a th:href="@{/tutor/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">View details</a>
+                        </div>
+                    </article>
                 </div>
             </div>
 
@@ -64,19 +102,20 @@
                             <span th:text="${req.preferredMeetingMethod}">Zoom</span>
                             <span th:text="${req.desiredResponseTime}">Today</span>
                         </div>
-                        <ul class="mt-3 mb-3" th:if="${offersByRequest.get(req.id) != null and !offersByRequest.get(req.id).isEmpty()}">
-                            <li th:each="offer : ${offersByRequest.get(req.id)}" class="d-flex justify-content-between align-items-center gap-2">
+                        <div th:if="${offersByRequest.get(req.id) != null}">
+                            <div class="rt-own-offer" th:each="offer : ${offersByRequest.get(req.id)}"
+                                 th:if="${currentUser != null and offer.tutorId == currentUser.id}">
                                 <span>
-                                    <span th:text="${tutorNamesById.get(offer.tutorId)}">tutor1</span>
+                                    You offered
                                     <span th:text="${#temporals.format(offer.offeredTime, 'MMM d, h:mm a')}">Oct 14, 4:00 PM</span>
                                 </span>
-                                <form th:if="${offer.tutorId == currentUser.id}" class="m-0"
+                                <form class="m-0"
                                       th:action="@{/tutor/requests/{id}/offers/{offerId}/withdraw(id=${req.id}, offerId=${offer.id})}" method="post">
                                     <button type="submit" class="btn btn-sm btn-rt-ghost">Withdraw</button>
                                 </form>
-                            </li>
-                        </ul>
-                        <form class="mt-3" th:action="@{/tutor/requests/{id}/offers(id=${req.id})}" method="post">
+                            </div>
+                        </div>
+                        <form th:action="@{/tutor/requests/{id}/offers(id=${req.id})}" method="post">
                             <input type="hidden" name="from" value="board">
                             <label class="form-label" th:for="${'time-' + req.id}">Offer a meeting time</label>
                             <input class="form-control mb-2" type="datetime-local" name="offeredTime" required th:id="${'time-' + req.id}">
@@ -87,15 +126,17 @@
                         </form>
                     </article>
                 </div>
-                <div class="col-12" th:if="${#lists.isEmpty(requests)}">
-                    <p class="text-muted">No open requests in your subjects.</p>
+                <div class="col-12" th:if="${#lists.isEmpty(requests) and (myOfferedRequests == null or #lists.isEmpty(myOfferedRequests))}">
+                    <div class="rt-card">
+                        <p class="rt-empty">No open requests in your subjects.</p>
+                    </div>
                 </div>
             </div>
 
             <h2 class="h5 mt-5 mb-3">Reviews</h2>
-            <div class="rt-card">
-                <p class="text-muted mb-0" th:if="${myReviews == null or #lists.isEmpty(myReviews)}">No reviews yet.</p>
-                <ul class="mb-0" th:if="${myReviews != null and !#lists.isEmpty(myReviews)}">
+            <div class="rt-card rt-card-pad">
+                <p class="rt-empty" th:if="${myReviews == null or #lists.isEmpty(myReviews)}">No reviews yet.</p>
+                <ul class="rt-review-list" th:if="${myReviews != null and !#lists.isEmpty(myReviews)}">
                     <li th:each="review : ${myReviews}">
                         <strong th:text="${review.score}">5</strong>
                         <span th:text="${review.feedback != null ? review.feedback : 'No written feedback.'}">Helpful</span>

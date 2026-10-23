@@ -23,6 +23,10 @@ public class KnowledgeArticle {
     @Column(length = 2000, nullable = false)
     private String verifiedSolution;
 
+    /** Null for seeded course notes. "triage" for a note saved from a student. */
+    @Column(length = 20)
+    private String kind;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public KnowledgeArticle() {}
@@ -72,6 +76,14 @@ public class KnowledgeArticle {
 
     public void setVerifiedSolution(String verifiedSolution) {
         this.verifiedSolution = verifiedSolution;
+    }
+
+    public String getKind() {
+        return kind;
+    }
+
+    public void setKind(String kind) {
+        this.kind = kind;
     }
 
     public LocalDateTime getCreatedAt() {

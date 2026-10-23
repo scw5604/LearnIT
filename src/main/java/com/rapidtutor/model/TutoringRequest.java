@@ -39,6 +39,9 @@ public class TutoringRequest {
     @Column(length = 3000)
     private String aiDiagnosticNote;
 
+    @Column(length = 2000)
+    private String studentExplanation;
+
     public Long getId() {
         return id;
     }
@@ -165,6 +168,14 @@ public class TutoringRequest {
 
     public void setAiDiagnosticNote(String aiDiagnosticNote) {
         this.aiDiagnosticNote = aiDiagnosticNote;
+    }
+
+    public String getStudentExplanation() {
+        return studentExplanation;
+    }
+
+    public void setStudentExplanation(String studentExplanation) {
+        this.studentExplanation = studentExplanation;
     }
 
     public LocalDateTime getOfferedMeetingTime() {

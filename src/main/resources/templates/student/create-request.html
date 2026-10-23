@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('RapidTutor · Post a request')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Post a request')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -12,13 +12,42 @@
                 <div class="col-lg-8">
                     <div class="rt-panel">
                         <h1>Post a request</h1>
-                        <p class="text-muted" th:if="${currentUser != null}">
-                            Your balance is <strong th:text="${currentUser.tokenBalance != null ? currentUser.tokenBalance : 0}">100</strong> tokens. A bounty can be 0 to 50.
-                        </p>
 
                         <div th:replace="~{fragments/alerts :: alerts}"></div>
 
-                        <form th:action="@{/student/requests}" th:object="${tutoringRequest}" method="post" accept-charset="UTF-8">
+                        <div th:if="${duckReady}">
+                            <p class="rt-kicker" th:text="${tutoringRequest.course}">HCDD 412</p>
+                            <h2 th:text="${tutoringRequest.topic}">Topic</h2>
+                            <p th:text="${tutoringRequest.shortDescription}">Description</p>
+                            <div class="rt-meta">
+                                <span th:text="${tutoringRequest.preferredMeetingMethod}">Zoom</span>
+                                <span th:text="${tutoringRequest.desiredResponseTime}">Today</span>
+                                <span th:text="${tutoringRequest.expectedEffort}">15 mins</span>
+                                <span th:text="${(tutoringRequest.bountyValue != null ? tutoringRequest.bountyValue : 0) + ' tokens'}">0 tokens</span>
+                            </div>
+
+                            <div th:replace="~{fragments/diagnostic-note :: scaffold(${duckNote}, 'duck')}"></div>
+                            <p class="mt-3 mb-0">Answer the question above, then walk it through.</p>
+                            <div th:if="${duckReply != null}">
+                                <div th:replace="~{fragments/diagnostic-note :: scaffold(${duckReply}, 'followup')}"></div>
+                            </div>
+
+                            <form class="mt-4" th:action="@{/student/requests}" method="post" accept-charset="UTF-8">
+                                <div class="mb-4">
+                                    <label class="form-label" for="studentExplanation">Your answer</label>
+                                    <textarea id="studentExplanation" name="studentExplanation" class="form-control" rows="4" required
+                                              th:text="${studentExplanation}">I tried...</textarea>
+                                </div>
+                                <button type="submit" class="btn btn-rt-primary w-100 mb-2" th:formaction="@{/student/requests/duck/reply}">Walk it through</button>
+                                <button type="submit" class="btn btn-rt-ghost w-100 mb-2">I'm still stuck</button>
+                                <button type="submit" class="btn btn-rt-ghost w-100" th:formaction="@{/student/requests/duck/solved}">I figured it out</button>
+                            </form>
+                            <p class="text-center mt-3 mb-0">
+                                <a th:href="@{/student/requests/new}">Start over</a>
+                            </p>
+                        </div>
+
+                        <form th:unless="${duckReady}" th:action="@{/student/requests/duck}" th:object="${tutoringRequest}" method="post" accept-charset="UTF-8">
                             <div class="mb-3">
                                 <label class="form-label" for="courseInput">Course</label>
                                 <select class="form-select" th:field="*{course}" id="courseInput" required>
@@ -37,7 +66,7 @@
                                 <textarea id="description" class="form-control" th:field="*{shortDescription}" rows="4" required placeholder="Describe the concept you are stuck on."></textarea>
                             </div>
 
-                            <div class="row mb-4">
+                            <div class="row mb-1">
                                 <div class="col-md-4">
                                     <label class="form-label" for="meeting">Meeting method</label>
                                     <select id="meeting" class="form-select" th:field="*{preferredMeetingMethod}" required>
@@ -50,7 +79,7 @@
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label" for="urgency">Response time</label>
-                                    <select id="urgency" class="form-select" th:field="*{desiredResponseTime}" required>
+                                    <select id="urgency" class="form-select" th:field="*{desiredResponseTime}" required aria-describedby="responseHint">
                                         <option value="" disabled selected>Select urgency</option>
                                         <option value="ASAP">ASAP</option>
                                         <option value="Within 2 hours">Within 2 hours</option>
@@ -68,17 +97,17 @@
                                     </select>
                                 </div>
                             </div>
+                            <p class="form-text mt-2" id="responseHint">ASAP closes after one hour, Within 2 hours after two hours, Today at the start of the next day, and Not urgent stays open.</p>
 
-                            <div class="mb-4">
+                            <div class="mb-4 mt-3">
                                 <label class="form-label" for="bounty">Priority bounty (tokens)</label>
                                 <input id="bounty" type="number" class="form-control" th:field="*{bountyValue}" min="0" max="50" value="0">
-                                <div class="form-text">Tokens are held until you cancel or the session is resolved.</div>
                             </div>
 
-                            <button type="submit" class="btn btn-rt-primary w-100">Submit request</button>
+                            <button type="submit" class="btn btn-rt-primary w-100">Talk it through</button>
                         </form>
 
-                        <p class="text-muted small mt-4 mb-0">
+                        <p class="text-muted small mt-4 mb-0" th:unless="${duckReady}">
                             Response times are not guaranteed. Do not include passwords, grades, a student ID, or a request to complete graded work.
                         </p>
                     </div>
@@ -90,7 +119,7 @@
     <div th:replace="~{fragments/footer :: footer}"></div>
 </div>
 
-<script>
+<script th:unless="${duckReady}">
     const topicInput = document.getElementById('topicInput');
     const courseInput = document.getElementById('courseInput');
     const deflectionResults = document.getElementById('deflectionResults');
@@ -102,18 +131,21 @@
     function renderSuggestion(article) {
         clearSuggestion();
         const box = document.createElement('div');
-        box.className = 'rt-suggestion';
+        box.className = 'rt-suggestion rt-suggestion-quiet';
 
         const title = document.createElement('h3');
-        title.textContent = 'Suggested solution';
-
-        const question = document.createElement('p');
-        question.textContent = 'Past question: ' + (article.problemDescription || '');
+        title.textContent = 'Course note';
 
         const solution = document.createElement('p');
         solution.textContent = article.verifiedSolution || '';
 
-        box.append(title, question, solution);
+        if (article.kind === 'triage') {
+            box.append(title, solution);
+        } else {
+            const question = document.createElement('p');
+            question.textContent = 'Past question: ' + (article.problemDescription || '');
+            box.append(title, question, solution);
+        }
         deflectionResults.append(box);
     }
 
@@ -138,8 +170,10 @@
             .catch(() => clearSuggestion());
     }
 
-    topicInput.addEventListener('keyup', searchKnowledge);
-    courseInput.addEventListener('change', searchKnowledge);
+    if (topicInput && courseInput) {
+        topicInput.addEventListener('keyup', searchKnowledge);
+        courseInput.addEventListener('change', searchKnowledge);
+    }
 </script>
 </body>
 </html>

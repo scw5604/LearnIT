@@ -2,10 +2,47 @@ package com.rapidtutor.service;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DiagnosticNoteCheckerTest {
+
+    @Test
+    void readsABodyOnTheSameLineAsItsLabel() {
+        String note = """
+                Core concept: Addition combines two quantities.
+                Diagnostic question: What does the plus sign tell you to do with the two numbers?
+                Starting step: Rewrite the expression in words before you compute it.
+                """;
+
+        List<DiagnosticNoteChecker.Section> sections = DiagnosticNoteChecker.sections(note);
+
+        assertEquals(3, sections.size());
+        assertEquals("Core concept", sections.get(0).getLabel());
+        assertEquals("Addition combines two quantities.", sections.get(0).getBody());
+        assertEquals("What does the plus sign tell you to do with the two numbers?", sections.get(1).getBody());
+    }
+
+    @Test
+    void readsABodyOnTheLineAfterItsLabel() {
+        String note = """
+                Core concept:
+                Addition combines two quantities.
+                Diagnostic question:
+                What does the plus sign tell you to do?
+                Starting step:
+                Rewrite the expression in words.
+                """;
+
+        List<DiagnosticNoteChecker.Section> sections = DiagnosticNoteChecker.sections(note);
+
+        assertEquals("Addition combines two quantities.", sections.get(0).getBody());
+        assertEquals("What does the plus sign tell you to do?", sections.get(1).getBody());
+        assertEquals("Rewrite the expression in words.", sections.get(2).getBody());
+    }
 
     @Test
     void acceptsANoteWithAllThreeSections() {
@@ -59,5 +96,16 @@ class DiagnosticNoteCheckerTest {
         String message = SocraticNotes.userMessage("IST 440W", "Loops", "a".repeat(900));
         assertTrue(message.startsWith("Course: IST 440W\nTopic: Loops\nDescription: "));
         assertFalse(message.contains("a".repeat(801)));
+    }
+
+    @Test
+    void offlineFollowUpQuotesTheStudentAndPassesTheChecker() {
+        String note = SocraticNotes.offlineFollowUp("loops", "I forgot to increment the counter.");
+        assertTrue(DiagnosticNoteChecker.accepts(note));
+        assertTrue(note.contains("I forgot to increment the counter."));
+
+        String message = SocraticNotes.followUpMessage("IST 440W", "Loops", "It never stops.", "Core concept: Loops.", "I checked the condition.");
+        assertTrue(message.contains("What they tried: I checked the condition."));
+        assertFalse(message.contains("student1"));
     }
 }

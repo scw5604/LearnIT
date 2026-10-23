@@ -25,8 +25,10 @@ import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Controller
 @RequestMapping("/tutor")
@@ -69,6 +71,20 @@ public class TutorController {
                 .filter(req -> tutor.getId().equals(req.getAssignedTutorId()))
                 .toList();
 
+        Set<Long> myOfferRequestIds = new HashSet<>();
+        for (MeetingOffer offer : offerRepository.findByTutorId(tutor.getId())) {
+            myOfferRequestIds.add(offer.getRequestId());
+        }
+        List<TutoringRequest> myOfferedRequests = new ArrayList<>();
+        List<TutoringRequest> openWithoutMine = new ArrayList<>();
+        for (TutoringRequest request : openRequests) {
+            if (myOfferRequestIds.contains(request.getId())) {
+                myOfferedRequests.add(request);
+            } else {
+                openWithoutMine.add(request);
+            }
+        }
+
         Map<Long, List<MeetingOffer>> offersByRequest = new HashMap<>();
         List<MeetingOffer> allOffers = new ArrayList<>();
         for (TutoringRequest request : openRequests) {
@@ -77,7 +93,8 @@ public class TutorController {
             allOffers.addAll(offers);
         }
 
-        model.addAttribute("requests", openRequests);
+        model.addAttribute("requests", openWithoutMine);
+        model.addAttribute("myOfferedRequests", myOfferedRequests);
         model.addAttribute("offersByRequest", offersByRequest);
         model.addAttribute("tutorNamesById", publicNames(allOffers));
         model.addAttribute("myClaimedRequests", myClaimedRequests);

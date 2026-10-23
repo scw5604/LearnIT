@@ -15,12 +15,20 @@ import java.util.Map;
 public class AiDiagnosisService {
 
     private static final Logger log = LoggerFactory.getLogger(AiDiagnosisService.class);
-    private static final String SYSTEM_PROMPT = """
-            You prepare a student for a peer tutoring session. Reply with exactly three labeled parts:
-            Core concept: ...
-            Diagnostic question: ...
-            Starting step: ...
-            Explain the idea, ask one question, and give a first step. Do not give the final answer, a worked solution, or code that completes the assignment.
+    private static final String FIRST_PROMPT = """
+            You are a rubber duck for a student stuck on coursework. They have not explained an attempt yet. Reply with exactly three labeled lines and no other text:
+            Core concept: name the idea in one or two sentences, with no solution.
+            Diagnostic question: one question about what they have already tried or where they got stuck.
+            Starting step: one action they can finish in a few minutes.
+            Do not give the final answer, a worked solution, or code that completes the assignment.
+            """;
+
+    private static final String FOLLOW_UP_PROMPT = """
+            You are a rubber duck. The student just explained what they tried. Respond only to that explanation. Reply with exactly three labeled lines and no other text:
+            Core concept: what their explanation shows they already understand, in one or two sentences.
+            Diagnostic question: one follow-up aimed at the gap in what they wrote.
+            Starting step: the single next thing to try, based on their words.
+            Do not give the final answer, a worked solution, or code that completes the assignment. If their explanation already resolves the blocker, say they can stop here in Starting step, without writing the solution.
             """;
 
     private final RestClient restClient;
@@ -37,38 +45,55 @@ public class AiDiagnosisService {
         this.restClient = RestClient.builder().build();
     }
 
-    @Async
-    public void generateDiagnosticScaffold(Long requestId, String course, String topic, String description) {
+    /** Returns a diagnostic note. Uses the offline note when Groq is unset or the reply is unusable. */
+    public String prepareNote(String course, String topic, String description) {
+        return noteOrOffline(FIRST_PROMPT, SocraticNotes.userMessage(course, topic, description), SocraticNotes.offline(topic));
+    }
+
+    /** One follow-up that responds to what the student already tried. */
+    public String prepareFollowUp(String course, String topic, String description, String note, String answer) {
+        return noteOrOffline(
+                FOLLOW_UP_PROMPT,
+                SocraticNotes.followUpMessage(course, topic, description, note, answer),
+                SocraticNotes.offlineFollowUp(topic, answer));
+    }
+
+    private String noteOrOffline(String systemPrompt, String userMessage, String fallback) {
         if (apiKey == null || apiKey.isBlank() || "mock-key".equals(apiKey)) {
-            saveDiagnosis(requestId, SocraticNotes.offline(topic));
-            return;
+            return fallback;
         }
-
-        String studentRequest = SocraticNotes.userMessage(course, topic, description);
-
         try {
-            Map<String, Object> requestBody = Map.of(
-                    "model", model,
-                    "messages", List.of(
-                            Map.of("role", "system", "content", SYSTEM_PROMPT),
-                            Map.of("role", "user", "content", studentRequest)
-                    )
-            );
-
-            Map<?, ?> response = restClient.post()
-                    .uri("https://api.groq.com/openai/v1/chat/completions")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json")
-                    .body(requestBody)
-                    .retrieve()
-                    .body(Map.class);
-
-            String result = GroqResponseParser.extractMessageContent(response);
-            saveDiagnosis(requestId, DiagnosticNoteChecker.accepts(result) ? result : SocraticNotes.offline(topic));
+            String result = askGroq(systemPrompt, userMessage);
+            return DiagnosticNoteChecker.accepts(result) ? result : fallback;
         } catch (Exception e) {
             log.warn("AI diagnosis failed: {}", e.getMessage());
-            saveDiagnosis(requestId, SocraticNotes.offline(topic));
+            return fallback;
         }
+    }
+
+    @Async
+    public void generateDiagnosticScaffold(Long requestId, String course, String topic, String description) {
+        saveDiagnosis(requestId, prepareNote(course, topic, description));
+    }
+
+    private String askGroq(String systemPrompt, String studentRequest) {
+        Map<String, Object> requestBody = Map.of(
+                "model", model,
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", studentRequest)
+                )
+        );
+
+        Map<?, ?> response = restClient.post()
+                .uri("https://api.groq.com/openai/v1/chat/completions")
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .body(requestBody)
+                .retrieve()
+                .body(Map.class);
+
+        return GroqResponseParser.extractMessageContent(response);
     }
 
     private void saveDiagnosis(Long requestId, String text) {

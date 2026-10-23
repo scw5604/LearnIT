@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('RapidTutor · Request details')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Request details')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -16,11 +16,7 @@
                                 <p class="rt-kicker mb-1" th:text="${request.course}">HCDD 412</p>
                                 <h1 th:text="${request.topic}">Topic</h1>
                             </div>
-                            <span class="rt-badge rt-badge-open" th:if="${request.status == 'OPEN'}">Open</span>
-                            <span class="rt-badge rt-badge-claimed" th:if="${request.status == 'CLAIMED'}">Claimed</span>
-                            <span class="rt-badge rt-badge-resolved" th:if="${request.status == 'RESOLVED'}">Resolved</span>
-                            <span class="rt-badge rt-badge-canceled" th:if="${request.status == 'CANCELED'}">Canceled</span>
-                            <span class="rt-badge rt-badge-expired" th:if="${request.status == 'EXPIRED'}">Expired</span>
+                            <th:block th:replace="~{fragments/status :: status(${request.status})}"></th:block>
                         </div>
 
                         <div th:replace="~{fragments/alerts :: alerts}"></div>
@@ -35,50 +31,60 @@
                         <p class="rt-kicker">Description</p>
                         <p th:text="${request.shortDescription}">Problem details</p>
 
-                        <p class="mt-4" th:if="${request.status == 'CLAIMED' or request.status == 'RESOLVED'}">
-                            Claimed by <strong th:text="${tutorName}">tutor1</strong>.
-                            <span th:text="${request.preferredMeetingMethod}">Zoom</span><span th:if="${request.offeredMeetingTime != null}" th:text="${' on ' + #temporals.format(request.offeredMeetingTime, 'MMM d, h:mm a')}"> on Oct 14, 4:00 PM</span>.
-                        </p>
+                        <p class="rt-kicker" th:if="${request.studentExplanation != null and !#strings.isEmpty(request.studentExplanation)}">What you tried</p>
+                        <p th:if="${request.studentExplanation != null and !#strings.isEmpty(request.studentExplanation)}" th:text="${request.studentExplanation}">What I tried</p>
+                        <div th:if="${request.status == 'OPEN'}">
+                            <div th:replace="~{fragments/diagnostic-note :: scaffold(${request.aiDiagnosticNote}, 'student')}"></div>
+                        </div>
+                        <div th:if="${request.status != 'OPEN'}">
+                            <div th:replace="~{fragments/diagnostic-note :: scaffold(${request.aiDiagnosticNote}, 'duck')}"></div>
+                        </div>
 
-                        <p class="mt-4" th:if="${request.status == 'OPEN' and (request.aiDiagnosticNote == null or #strings.isEmpty(request.aiDiagnosticNote))}">
-                            Preparing note
-                        </p>
-                        <p class="mt-4" th:if="${request.status == 'OPEN' and request.aiDiagnosticNote != null and !#strings.isEmpty(request.aiDiagnosticNote)}">
-                            Note ready. Your tutor will use it to ask questions, not to hand over the answer.
-                        </p>
+                        <div class="rt-callout" th:if="${(request.status == 'CLAIMED' or request.status == 'RESOLVED') and tutorName != null}">
+                            <p class="rt-kicker">Session</p>
+                            <p class="mb-0">
+                                Claimed by <strong th:text="${tutorName}">tutor1</strong>.
+                                <span th:text="${request.preferredMeetingMethod}">Zoom</span><span th:if="${request.offeredMeetingTime != null}" th:text="${' on ' + #temporals.format(request.offeredMeetingTime, 'MMM d, h:mm a')}"> on Oct 14, 4:00 PM</span>.
+                            </p>
+                        </div>
 
                         <div class="mt-4" th:if="${request.status == 'OPEN'}">
-                            <h3 class="h5">Time offers</h3>
-                            <p class="text-muted" th:if="${offers == null or #lists.isEmpty(offers)}">No tutors have offered a time yet.</p>
-                            <form class="d-flex justify-content-between align-items-center gap-3 mb-2"
-                                  th:each="offer : ${offers}"
-                                  th:action="@{/student/requests/{id}/offers/{offerId}/accept(id=${request.id}, offerId=${offer.id})}"
-                                  method="post">
-                                <span>
-                                    <strong th:text="${tutorNamesById.get(offer.tutorId)}">tutor1</strong>
-                                    <span th:text="${#temporals.format(offer.offeredTime, 'MMM d, h:mm a')}">Oct 14, 4:00 PM</span>
-                                </span>
-                                <button type="submit" class="btn btn-sm btn-rt-ok">Accept</button>
+                            <h3 class="h5 mb-1">Time offers</h3>
+                            <p class="rt-checking">Checking for offers</p>
+                            <p class="text-muted mb-0" th:if="${offers == null or #lists.isEmpty(offers)}">No tutors have offered a time yet.</p>
+                            <div class="rt-offer-list" th:if="${offers != null and !#lists.isEmpty(offers)}">
+                                <form class="rt-offer"
+                                      th:each="offer : ${offers}"
+                                      th:action="@{/student/requests/{id}/offers/{offerId}/accept(id=${request.id}, offerId=${offer.id})}"
+                                      method="post">
+                                    <div>
+                                        <strong th:text="${tutorNamesById.get(offer.tutorId)}">tutor1</strong>
+                                        <div class="rt-meta mb-0">
+                                            <span th:text="${#temporals.format(offer.offeredTime, 'MMM d, h:mm a')}">Oct 14, 4:00 PM</span>
+                                            <span th:text="${request.preferredMeetingMethod}">Zoom</span>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-rt-ok">Accept</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="rt-detail-actions" th:if="${request.status == 'CLAIMED' or request.status == 'RESOLVED' or request.status == 'OPEN'}">
+                            <form th:if="${request.status == 'OPEN' and request.aiDiagnosticNote != null and !#strings.isEmpty(request.aiDiagnosticNote)}"
+                                  th:action="@{/student/requests/{id}/triage(id=${request.id})}" method="post" class="m-0">
+                                <button type="submit" class="btn btn-rt-primary">This answered my question</button>
+                            </form>
+                            <form th:if="${request.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${request.id})}" method="post" class="m-0">
+                                <button type="submit" class="btn btn-rt-ok">Mark resolved and pay the tutor</button>
+                            </form>
+                            <a th:if="${request.status == 'RESOLVED' and request.assignedTutorId != null and !alreadyReviewed}" class="btn btn-rt-primary" th:href="@{/student/requests/{id}/review(id=${request.id})}">Leave a review</a>
+                            <p class="text-muted mb-0" th:if="${request.status == 'RESOLVED' and request.assignedTutorId != null and alreadyReviewed}">You reviewed this session.</p>
+                            <form th:if="${request.status == 'OPEN' or request.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/cancel(id=${request.id})}" method="post" class="m-0">
+                                <button type="submit" class="btn btn-rt-danger">Cancel request</button>
                             </form>
                         </div>
 
-                        <form class="mt-4" th:if="${request.status == 'OPEN' or request.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/cancel(id=${request.id})}" method="post">
-                            <button type="submit" class="btn btn-rt-danger w-100">Cancel request</button>
-                        </form>
-                        <form class="mt-2" th:if="${request.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${request.id})}" method="post">
-                            <button type="submit" class="btn btn-rt-ok w-100">Mark resolved and pay the tutor</button>
-                        </form>
-
-                        <div class="mt-4" th:if="${events != null and !#lists.isEmpty(events)}">
-                            <h3 class="h5">History</h3>
-                            <ul class="mb-0">
-                                <li th:each="event : ${events}">
-                                    <span th:text="${#temporals.format(event.at, 'MMM d, h:mm a')}">Oct 15, 4:00 PM</span>
-                                    <span th:text="${event.actorUsername}">student1</span>
-                                    <span th:text="${event.summary}">posted the request</span>
-                                </li>
-                            </ul>
-                        </div>
+                        <th:block th:replace="~{fragments/timeline :: timeline(${events})}"></th:block>
                     </div>
                 </div>
             </div>

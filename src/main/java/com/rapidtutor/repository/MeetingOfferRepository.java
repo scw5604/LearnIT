@@ -12,6 +12,8 @@ public interface MeetingOfferRepository extends JpaRepository<MeetingOffer, Long
 
     List<MeetingOffer> findByRequestIdOrderByOfferedTimeAsc(Long requestId);
 
+    List<MeetingOffer> findByTutorId(Long tutorId);
+
     Optional<MeetingOffer> findByRequestIdAndTutorId(Long requestId, Long tutorId);
 
     long countByRequestId(Long requestId);

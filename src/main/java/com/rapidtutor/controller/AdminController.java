@@ -92,8 +92,12 @@ public class AdminController {
         long resolved = requestRepository.countByStatus("RESOLVED");
         model.addAttribute("resolvedCount", resolved);
         model.addAttribute("resolvedWithNoteCount", requestRepository.countResolvedWithDiagnosticNote());
-        model.addAttribute("courseCounts", toLabelCounts(requestRepository.countGroupedByCourse()));
-        model.addAttribute("topicCounts", toLabelCounts(requestRepository.countGroupedByTopic()));
+        List<LabelCount> courseCounts = toLabelCounts(requestRepository.countGroupedByCourse());
+        List<LabelCount> topicCounts = toLabelCounts(requestRepository.countGroupedByTopic());
+        model.addAttribute("courseCounts", courseCounts);
+        model.addAttribute("topicCounts", topicCounts);
+        model.addAttribute("courseMax", maxCount(courseCounts));
+        model.addAttribute("topicMax", maxCount(topicCounts));
         model.addAttribute("tutorScores", tutorScores());
         model.addAttribute("scoreCounts", scoreCounts());
         model.addAttribute("recentReviews", recentReviews());
@@ -108,6 +112,16 @@ public class AdminController {
         model.addAttribute("resolvedCount", requestRepository.countByStatus("RESOLVED"));
         model.addAttribute("canceledCount", requestRepository.countByStatus("CANCELED"));
         model.addAttribute("expiredCount", requestRepository.countByStatus("EXPIRED"));
+    }
+
+    private long maxCount(List<LabelCount> counts) {
+        long max = 0;
+        for (LabelCount count : counts) {
+            if (count.count() > max) {
+                max = count.count();
+            }
+        }
+        return max;
     }
 
     private List<LabelCount> toLabelCounts(List<Object[]> rows) {

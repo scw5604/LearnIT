@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('RapidTutor · Requests')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Requests')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -17,65 +17,56 @@
 
             <div th:replace="~{fragments/alerts :: alerts}"></div>
 
-            <div class="rt-card">
-                <div class="table-responsive">
-                    <table class="table rt-table mb-0">
-                        <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Course</th>
-                            <th>Topic</th>
-                            <th>Status</th>
-                            <th>Bounty</th>
-                            <th>Effort</th>
-                            <th>Meeting</th>
-                            <th>Actions</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:if="${#lists.isEmpty(requests)}">
-                            <td colspan="8" class="rt-empty">No requests yet. Post a blocker to get started.</td>
-                        </tr>
-                        <tr th:each="req : ${requests}">
-                            <td class="text-muted" th:text="${req.id}">1</td>
-                            <td th:text="${req.course}">HCDD 412</td>
-                            <td>
-                                <div th:text="${req.topic}">Topic Name</div>
-                                <div class="text-muted small" th:if="${req.status == 'OPEN' and (req.aiDiagnosticNote == null or #strings.isEmpty(req.aiDiagnosticNote))}">Preparing note</div>
-                                <div class="text-muted small" th:if="${req.status == 'OPEN' and req.aiDiagnosticNote != null and !#strings.isEmpty(req.aiDiagnosticNote)}">Note ready</div>
-                                <div class="text-muted small" th:if="${req.status == 'OPEN'}" th:text="${(offerCounts.get(req.id) != null ? offerCounts.get(req.id) : 0) + ' time offers'}">0 time offers</div>
-                                <div class="text-muted small" th:if="${(req.status == 'CLAIMED' or req.status == 'RESOLVED') and tutorNames.get(req.id) != null}">
-                                    <span th:text="${tutorNames.get(req.id)}">tutor1</span>
-                                    <span th:if="${req.offeredMeetingTime != null}" th:text="${' · ' + req.preferredMeetingMethod + ' on ' + #temporals.format(req.offeredMeetingTime, 'MMM d, h:mm a')}"> · Zoom on Oct 14, 4:00 PM</span>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="rt-badge rt-badge-open" th:if="${req.status == 'OPEN'}">Open</span>
-                                <span class="rt-badge rt-badge-claimed" th:if="${req.status == 'CLAIMED'}">Claimed</span>
-                                <span class="rt-badge rt-badge-resolved" th:if="${req.status == 'RESOLVED'}">Resolved</span>
-                                <span class="rt-badge rt-badge-canceled" th:if="${req.status == 'CANCELED'}">Canceled</span>
-                                <span class="rt-badge rt-badge-expired" th:if="${req.status == 'EXPIRED'}">Expired</span>
-                            </td>
-                            <td th:text="${req.bountyValue != null ? req.bountyValue : 0}">0</td>
-                            <td th:text="${req.expectedEffort}">15 mins</td>
-                            <td th:text="${req.preferredMeetingMethod}">Zoom</td>
-                            <td>
-                                <div class="rt-actions">
-                                    <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Details</a>
-                                    <form th:if="${req.status == 'OPEN' or req.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/cancel(id=${req.id})}" method="post" class="m-0">
-                                        <button type="submit" class="btn btn-sm btn-rt-danger">Cancel</button>
-                                    </form>
-                                    <form th:if="${req.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${req.id})}" method="post" class="m-0">
-                                        <button type="submit" class="btn btn-sm btn-rt-ok">Mark resolved</button>
-                                    </form>
-                                    <a th:if="${req.status == 'RESOLVED' and !reviewedRequestIds.contains(req.id)}" th:href="@{/student/requests/{id}/review(id=${req.id})}" class="btn btn-sm btn-rt-ghost">Leave review</a>
-                                    <span th:if="${req.status == 'RESOLVED' and reviewedRequestIds.contains(req.id)}" class="text-muted small">Reviewed</span>
-                                    <span th:if="${req.status == 'CANCELED' or req.status == 'EXPIRED'}" class="text-muted small">Closed</span>
-                                </div>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
+            <div class="rt-card" th:if="${#lists.isEmpty(requests)}">
+                <p class="rt-empty">No requests yet. Post a blocker to get started.</p>
+            </div>
+
+            <h2 class="h5 mb-3" th:if="${offeredRequests != null and !#lists.isEmpty(offeredRequests)}">Time offers</h2>
+            <div class="row g-3 mb-5" th:if="${offeredRequests != null and !#lists.isEmpty(offeredRequests)}">
+                <div class="col-md-6" th:each="req : ${offeredRequests}">
+                    <article class="rt-card rt-request-card h-100">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <p class="rt-kicker mb-0" th:text="${req.course}">HCDD 412</p>
+                            <th:block th:replace="~{fragments/status :: status(${req.status})}"></th:block>
+                        </div>
+                        <h2 th:text="${req.topic}">Topic</h2>
+                        <p th:text="${req.shortDescription}">Description</p>
+                        <div class="rt-meta">
+                            <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' tokens'}">0 tokens</span>
+                            <span th:text="${(offerCounts.get(req.id) != null ? offerCounts.get(req.id) : 0) + ' time offers'}">0 time offers</span>
+                            <span th:if="${req.aiDiagnosticNote == null or #strings.isEmpty(req.aiDiagnosticNote)}">Preparing note</span>
+                            <span th:if="${req.aiDiagnosticNote != null and !#strings.isEmpty(req.aiDiagnosticNote)}">Note ready</span>
+                        </div>
+                        <div class="rt-actions">
+                            <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-primary">Open</a>
+                        </div>
+                    </article>
+                </div>
+            </div>
+
+            <h2 class="h5 mb-3" th:if="${offeredRequests != null and !#lists.isEmpty(offeredRequests) and otherRequests != null and !#lists.isEmpty(otherRequests)}">My requests</h2>
+            <div class="row g-3" th:if="${otherRequests != null and !#lists.isEmpty(otherRequests)}">
+                <div class="col-md-6" th:each="req : ${otherRequests}">
+                    <article class="rt-card rt-request-card h-100">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <p class="rt-kicker mb-0" th:text="${req.course}">HCDD 412</p>
+                            <th:block th:replace="~{fragments/status :: status(${req.status})}"></th:block>
+                        </div>
+                        <h2 th:text="${req.topic}">Topic</h2>
+                        <p th:text="${req.shortDescription}">Description</p>
+                        <div class="rt-meta">
+                            <span th:text="${(req.bountyValue != null ? req.bountyValue : 0) + ' tokens'}">0 tokens</span>
+                            <span th:if="${req.status == 'OPEN'}" th:text="${(offerCounts.get(req.id) != null ? offerCounts.get(req.id) : 0) + ' time offers'}">0 time offers</span>
+                            <span th:if="${req.status == 'OPEN' and (req.aiDiagnosticNote == null or #strings.isEmpty(req.aiDiagnosticNote))}">Preparing note</span>
+                            <span th:if="${req.status == 'OPEN' and req.aiDiagnosticNote != null and !#strings.isEmpty(req.aiDiagnosticNote)}">Note ready</span>
+                            <span th:if="${(req.status == 'CLAIMED' or req.status == 'RESOLVED') and tutorNames.get(req.id) != null}" th:text="${tutorNames.get(req.id)}">tutor1</span>
+                            <span th:if="${(req.status == 'CLAIMED' or req.status == 'RESOLVED') and req.offeredMeetingTime != null}"
+                                  th:text="${req.preferredMeetingMethod + ' on ' + #temporals.format(req.offeredMeetingTime, 'MMM d, h:mm a')}">Zoom on Oct 14, 4:00 PM</span>
+                        </div>
+                        <div class="rt-actions">
+                            <a th:href="@{/student/requests/{id}(id=${req.id})}" class="btn btn-sm btn-rt-primary">Open</a>
+                        </div>
+                    </article>
                 </div>
             </div>
         </div>

@@ -2,6 +2,7 @@ package com.rapidtutor;
 
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
+import com.rapidtutor.repository.KnowledgeArticleRepository;
 import com.rapidtutor.repository.MeetingOfferRepository;
 import com.rapidtutor.repository.NotificationRepository;
 import com.rapidtutor.repository.RequestEventRepository;
@@ -10,12 +11,14 @@ import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.EconomyService;
 import com.rapidtutor.service.RequestExpiration;
+import com.rapidtutor.service.SocraticNotes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.LocalDateTime;
@@ -42,7 +45,10 @@ import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "spring.datasource.url=jdbc:h2:mem:rapidtutor-rules;DB_CLOSE_DELAY=-1")
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:rapidtutor-rules;DB_CLOSE_DELAY=-1",
+        "groq.api.key=mock-key"
+})
 class PlatformRulesTests {
 
     private static final Set<String> DEMO_USERS = Set.of("student1", "tutor1", "admin");
@@ -77,6 +83,9 @@ class PlatformRulesTests {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private KnowledgeArticleRepository knowledgeArticleRepository;
+
     @BeforeEach
     void resetRows() {
         reviewRepository.deleteAll();
@@ -89,6 +98,7 @@ class PlatformRulesTests {
                 .forEach(userRepository::delete);
         setBalance("student1", 100);
         setBalance("tutor1", 100);
+        knowledgeArticleRepository.deleteByKind("triage");
     }
 
     @Test
@@ -245,6 +255,7 @@ class PlatformRulesTests {
         assertEquals(tutor.getId(), reviewRepository.findByRequestId(request.getId()).orElseThrow().getTutorId());
         assertEquals(student.getId(), reviewRepository.findByRequestId(request.getId()).orElseThrow().getStudentId());
         assertEquals(4, reviewRepository.findByRequestId(request.getId()).orElseThrow().getScore());
+        assertEquals(110, userRepository.findByUsername("student1").getTokenBalance());
     }
 
     @Test
@@ -302,8 +313,14 @@ class PlatformRulesTests {
 
         mockMvc.perform(get("/tutor/board").with(user("tutor1").roles("TUTOR")))
                 .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Time offered")))
                 .andExpect(content().string(containsString("Offer me")))
                 .andExpect(content().string(containsString("Jun 2, 3:30 PM")));
+
+        mockMvc.perform(get("/student/dashboard").with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Time offers")))
+                .andExpect(content().string(containsString("Offer me")));
 
         mockMvc.perform(post("/student/requests/" + request.getId() + "/offers/" + offer.getId() + "/accept")
                         .with(user("student2").roles("STUDENT"))
@@ -415,7 +432,7 @@ class PlatformRulesTests {
     }
 
     @Test
-    void postedRequestIgnoresStatusAndForeignIds() throws Exception {
+    void postingWithoutTheDuckDoesNotCreateARequest() throws Exception {
         mockMvc.perform(post("/student/requests")
                         .with(user("student1").roles("STUDENT"))
                         .with(csrf())
@@ -426,6 +443,33 @@ class PlatformRulesTests {
                         .param("desiredResponseTime", "Not urgent")
                         .param("expectedEffort", "Quick explanation (10-15 mins)")
                         .param("bountyValue", "0")
+                        .param("studentExplanation", "I tried the first example."))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Talk it through before posting.")));
+
+        assertEquals(0, requestRepository.count());
+        assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
+    }
+
+    @Test
+    void duckPassStoresTheNoteAndIgnoresForeignIds() throws Exception {
+        MockHttpSession session = duckSession("Binding check", "I am stuck on the concept.");
+        assertEquals(0, requestRepository.count());
+
+        mockMvc.perform(post("/student/requests")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "   "))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Explain what you have already tried.")));
+        assertEquals(0, requestRepository.count());
+
+        mockMvc.perform(post("/student/requests")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "I traced the condition and it never changes.")
                         .param("status", "CLAIMED")
                         .param("studentId", "999")
                         .param("assignedTutorId", "999"))
@@ -435,6 +479,184 @@ class PlatformRulesTests {
         assertEquals("OPEN", stored.getStatus());
         assertEquals(userRepository.findByUsername("student1").getId(), stored.getStudentId());
         assertNull(stored.getAssignedTutorId());
+        assertEquals("I traced the condition and it never changes.", stored.getStudentExplanation());
+        assertEquals(SocraticNotes.offline("Binding check"), stored.getAiDiagnosticNote());
+        assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
+    }
+
+    @Test
+    void figuringItOutSavesATriageNoteWithoutARequest() throws Exception {
+        MockHttpSession session = duckSession("Solved alone", "I am stuck on the concept.");
+
+        mockMvc.perform(post("/student/requests/duck/solved")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "The loop variable was never updated."))
+                .andExpect(redirectedUrl("/student/knowledge"))
+                .andExpect(flash().attributeExists("successMessage"));
+
+        assertEquals(0, requestRepository.count());
+        assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
+        var articles = knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Solved alone");
+        assertEquals(1, articles.size());
+        assertEquals("triage", articles.get(0).getKind());
+        assertEquals("Solved alone", articles.get(0).getProblemDescription());
+        assertEquals(SocraticNotes.offline("Solved alone").trim(), articles.get(0).getVerifiedSolution());
+        assertFalse(articles.get(0).getProblemDescription().contains("The loop variable was never updated."));
+        assertFalse(articles.get(0).getVerifiedSolution().contains("The loop variable was never updated."));
+
+        mockMvc.perform(get("/student/knowledge")
+                        .param("topic", "Solved alone")
+                        .with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Soquacktic")))
+                .andExpect(content().string(containsString("Solved alone is the idea to clarify")))
+                .andExpect(content().string(not(containsString("The loop variable was never updated."))))
+                .andExpect(content().string(not(containsString("I am stuck on the concept."))));
+    }
+
+    @Test
+    void walkingItThroughShowsAFollowUpWithoutARequest() throws Exception {
+        MockHttpSession session = duckSession("Loop counters", "The loop never stops.");
+
+        mockMvc.perform(post("/student/requests/duck/reply")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "I forgot to increment the counter."))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Follow-up")))
+                .andExpect(content().string(containsString("Answer the question above, then walk it through.")))
+                .andExpect(content().string(containsString("I forgot to increment the counter.")))
+                .andExpect(content().string(containsString("Loop counters is the idea to clarify")))
+                .andExpect(content().string(containsString("I'm still stuck")))
+                .andExpect(content().string(containsString("I figured it out")));
+        assertEquals(0, requestRepository.count());
+
+        mockMvc.perform(post("/student/requests/duck/reply")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "The condition checks the wrong variable."))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("The condition checks the wrong variable.")))
+                .andExpect(content().string(not(containsString("I forgot to increment the counter."))));
+        assertEquals(0, requestRepository.count());
+
+        mockMvc.perform(post("/student/requests/duck/solved")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "The condition checks the wrong variable."))
+                .andExpect(redirectedUrl("/student/knowledge"));
+
+        assertEquals(0, requestRepository.count());
+        var articles = knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Loop counters");
+        assertEquals(1, articles.size());
+        assertTrue(articles.get(0).getVerifiedSolution().contains("The condition checks the wrong variable."));
+        assertFalse(articles.get(0).getVerifiedSolution().contains("is the idea to clarify"));
+    }
+
+    @Test
+    void stillStuckAfterAReplyStoresTheFollowUp() throws Exception {
+        MockHttpSession session = duckSession("Loop counters", "The loop never stops.");
+
+        mockMvc.perform(post("/student/requests/duck/reply")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "I forgot to increment the counter."))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/student/requests")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "I forgot to increment the counter."))
+                .andExpect(redirectedUrl("/student/dashboard"));
+
+        TutoringRequest stored = requestRepository.findAll().get(0);
+        assertEquals("I forgot to increment the counter.", stored.getStudentExplanation());
+        assertTrue(stored.getAiDiagnosticNote().contains("I forgot to increment the counter."));
+        assertFalse(stored.getAiDiagnosticNote().contains("is the idea to clarify"));
+    }
+
+    @Test
+    void closingFromTheNoteRefundsAndSavesTheArticle() throws Exception {
+        User student = userRepository.findByUsername("student1");
+        TutoringRequest request = newRequest(student, "HCDD 412", "Triage topic");
+        request.setBountyValue(10);
+        request = economyService.createRequestWithBounty("student1", request, 10);
+        request.setAiDiagnosticNote(SocraticNotes.offline("Triage topic"));
+        request = requestRepository.save(request);
+        assertEquals(90, userRepository.findByUsername("student1").getTokenBalance());
+
+        mockMvc.perform(post("/tutor/requests/" + request.getId() + "/offers")
+                        .with(user("tutor1").roles("TUTOR"))
+                        .with(csrf())
+                        .param("from", "board")
+                        .param("offeredTime", "2027-06-05T11:00"))
+                .andExpect(flash().attributeExists("successMessage"));
+        assertEquals(1, offerRepository.count());
+
+        mockMvc.perform(post("/student/requests/" + request.getId() + "/triage")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf()))
+                .andExpect(redirectedUrl("/student/requests/" + request.getId()))
+                .andExpect(flash().attributeExists("successMessage"));
+
+        TutoringRequest stored = requestRepository.findById(request.getId()).orElseThrow();
+        assertEquals("RESOLVED", stored.getStatus());
+        assertNull(stored.getAssignedTutorId());
+        assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
+        assertEquals(100, userRepository.findByUsername("tutor1").getTokenBalance());
+        assertEquals(0, offerRepository.count());
+        var articles = knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Triage topic");
+        assertEquals(1, articles.size());
+        assertEquals("triage", articles.get(0).getKind());
+
+        mockMvc.perform(get("/student/requests/" + request.getId()).with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Soquacktic")))
+                .andExpect(content().string(not(containsString("Leave a review"))));
+
+        mockMvc.perform(post("/student/requests/" + request.getId() + "/triage")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf()))
+                .andExpect(flash().attribute("errorMessage", "Only an open request can be closed from the note."));
+        assertEquals(1, knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Triage topic").size());
+    }
+
+    @Test
+    void lessonScaffoldShowsTheBodyAfterTheLabel() throws Exception {
+        User student = userRepository.findByUsername("student1");
+        TutoringRequest request = requestRepository.save(newRequest(student, "HCDD 412", "Scaffold topic"));
+        request.setAiDiagnosticNote("""
+                Core concept:
+                Addition combines two quantities.
+                Diagnostic question:
+                What does the plus sign tell you to do?
+                Starting step:
+                Rewrite the expression in words.
+                """);
+        request.setStudentExplanation("I added the numbers in the wrong order.");
+        requestRepository.save(request);
+
+        mockMvc.perform(get("/tutor/requests/" + request.getId()).with(user("tutor1").roles("TUTOR")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("AI lesson scaffold")))
+                .andExpect(content().string(containsString("Addition combines two quantities.")))
+                .andExpect(content().string(containsString("I added the numbers in the wrong order.")));
+
+        mockMvc.perform(get("/student/requests/" + request.getId()).with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Soquacktic")))
+                .andExpect(content().string(containsString("Addition combines two quantities.")));
     }
 
     @Test
@@ -576,6 +798,26 @@ class PlatformRulesTests {
         MvcResult adminConsole = mockMvc.perform(get("/h2-console").with(user("admin").roles("ADMIN")))
                 .andReturn();
         assertTrue(adminConsole.getResponse().getStatus() != 403);
+    }
+
+    private MockHttpSession duckSession(String topic, String description) throws Exception {
+        MvcResult ready = mockMvc.perform(post("/student/requests/duck")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("course", "HCDD 412")
+                        .param("topic", topic)
+                        .param("shortDescription", description)
+                        .param("preferredMeetingMethod", "Zoom")
+                        .param("desiredResponseTime", "Not urgent")
+                        .param("expectedEffort", "Quick explanation (10-15 mins)")
+                        .param("bountyValue", "0"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(topic + " is the idea to clarify")))
+                .andExpect(content().string(containsString("Walk it through")))
+                .andExpect(content().string(containsString("Your answer")))
+                .andExpect(content().string(not(containsString("Follow-up"))))
+                .andReturn();
+        return (MockHttpSession) ready.getRequest().getSession(false);
     }
 
     private void setBalance(String username, int balance) {

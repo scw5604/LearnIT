@@ -1,7 +1,9 @@
 package com.rapidtutor.service;
 
+import com.rapidtutor.model.Review;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
+import com.rapidtutor.repository.ReviewRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -12,12 +14,17 @@ import java.time.LocalDateTime;
 @Service
 public class EconomyService {
 
+    static final int REVIEW_REWARD = 10;
+
     private final UserRepository userRepository;
     private final TutoringRequestRepository requestRepository;
+    private final ReviewRepository reviewRepository;
 
-    public EconomyService(UserRepository userRepository, TutoringRequestRepository requestRepository) {
+    public EconomyService(UserRepository userRepository, TutoringRequestRepository requestRepository,
+                          ReviewRepository reviewRepository) {
         this.userRepository = userRepository;
         this.requestRepository = requestRepository;
+        this.reviewRepository = reviewRepository;
     }
 
     /** Deducts bounty from the student and creates the request in one transaction. */
@@ -52,6 +59,7 @@ public class EconomyService {
         request.setCanceledTimestamp(null);
         request.setOfferedMeetingTime(null);
         request.setAiDiagnosticNote(null);
+        request.setStudentExplanation(null);
         request.setStatus("OPEN");
         return requestRepository.save(request);
     }
@@ -80,6 +88,34 @@ public class EconomyService {
         request.setStatus("RESOLVED");
         request.setResolvedTimestamp(LocalDateTime.now());
         requestRepository.save(request);
+    }
+
+    /** Refunds an open request that the student closed from the diagnostic note. No tutor is paid. */
+    @Transactional
+    public void resolveFromTriage(Long requestId) {
+        TutoringRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found."));
+        if (!"OPEN".equals(request.getStatus())) {
+            throw new IllegalStateException("Only an open request can be closed from the note.");
+        }
+        if (request.getAiDiagnosticNote() == null || request.getAiDiagnosticNote().isBlank()) {
+            throw new IllegalStateException("A diagnostic note is not ready yet.");
+        }
+        refundStudent(request);
+        request.setStatus("RESOLVED");
+        request.setResolvedTimestamp(LocalDateTime.now());
+        requestRepository.save(request);
+    }
+
+    /** Saves the review and adds the review reward once, in the same transaction. */
+    @Transactional
+    public void saveReviewAndReward(Review review) {
+        reviewRepository.save(review);
+        User student = userRepository.findById(review.getStudentId())
+                .orElseThrow(() -> new IllegalArgumentException("Student not found."));
+        int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
+        student.setTokenBalance(currentBalance + REVIEW_REWARD);
+        userRepository.save(student);
     }
 
     /** Refunds the bounty and marks the request canceled. */

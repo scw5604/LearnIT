@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="scaffold(text, audience)" class="rt-suggestion mt-4" th:if="${text != null and !#strings.isEmpty(text)}">
+    <h3 th:if="${audience == 'tutor'}">AI lesson scaffold</h3>
+    <h3 th:if="${audience == 'followup'}">Follow-up</h3>
+    <h3 th:if="${audience == 'student' or audience == 'duck'}">🦆 Soquacktic</h3>
+    <p th:if="${audience == 'tutor'}">Use these questions to guide the student. Do not hand over the final answer.</p>
+    <p th:if="${audience == 'student'}">This is a starting point. You can still accept a time.</p>
+    <th:block th:with="sections=${T(com.rapidtutor.service.DiagnosticNoteChecker).sections(text)}">
+        <div class="rt-note-line" th:each="section : ${sections}">
+            <p class="rt-kicker" th:text="${section.label}">Core concept</p>
+            <p class="rt-note" th:text="${section.body}">Clarify the idea before the session.</p>
+        </div>
+        <p class="rt-note" th:if="${sections.isEmpty()}" th:text="${text}">Raw note</p>
+    </th:block>
+</div>
+</body>
+</html>

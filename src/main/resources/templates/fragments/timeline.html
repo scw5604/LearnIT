@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="timeline(events)">
+    <div class="mt-4" th:if="${events != null and !#lists.isEmpty(events)}">
+        <h3 class="h5">History</h3>
+        <ol class="rt-timeline mb-0">
+            <li th:each="event : ${events}">
+                <time th:text="${#temporals.format(event.at, 'MMM d, h:mm a')}">Oct 15, 4:00 PM</time>
+                <p>
+                    <span th:text="${event.actorUsername}">student1</span>
+                    <span th:text="${event.summary}">posted the request</span>
+                </p>
+            </li>
+        </ol>
+    </div>
+</th:block>
+</body>
+</html>

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('RapidTutor · Admin')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Admin')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -27,7 +27,7 @@
 
             <h2 class="h5 mb-3">Tutor applications</h2>
             <div class="rt-card mb-4">
-                <p class="text-muted mb-0" th:if="${#lists.isEmpty(applicants)}">No tutor applications.</p>
+                <p class="rt-empty" th:if="${#lists.isEmpty(applicants)}">No tutor applications.</p>
                 <div class="table-responsive" th:if="${!#lists.isEmpty(applicants)}">
                     <table class="table rt-table mb-0">
                         <thead>
