@@ -36,6 +36,9 @@ public class User {
     @Column(nullable = false)
     private boolean mustChangePassword;
 
+    @Version
+    private Long version;
+
     public String getPublicName() {
         if (displayName != null && !displayName.isBlank()) {
             return displayName;

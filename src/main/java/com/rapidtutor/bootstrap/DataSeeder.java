@@ -5,24 +5,50 @@ import com.rapidtutor.model.KnowledgeArticle;
 import com.rapidtutor.model.User;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
 import com.rapidtutor.repository.UserRepository;
+import com.rapidtutor.service.PasswordRules;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Locale;
 
 @Component
+@Order(0)
 public class DataSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final KnowledgeArticleRepository knowledgeArticleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final boolean demoUsersEnabled;
+    private final String studentUsername;
+    private final String studentPassword;
+    private final String tutorUsername;
+    private final String tutorPassword;
+    private final String adminUsername;
+    private final String adminPassword;
 
     public DataSeeder(UserRepository userRepository, KnowledgeArticleRepository knowledgeArticleRepository,
-                      PasswordEncoder passwordEncoder) {
+                      PasswordEncoder passwordEncoder,
+                      @Value("${rapidtutor.demo-users.enabled:false}") boolean demoUsersEnabled,
+                      @Value("${rapidtutor.demo-users.student.username:}") String studentUsername,
+                      @Value("${rapidtutor.demo-users.student.password:}") String studentPassword,
+                      @Value("${rapidtutor.demo-users.tutor.username:}") String tutorUsername,
+                      @Value("${rapidtutor.demo-users.tutor.password:}") String tutorPassword,
+                      @Value("${rapidtutor.demo-users.admin.username:}") String adminUsername,
+                      @Value("${rapidtutor.demo-users.admin.password:}") String adminPassword) {
         this.userRepository = userRepository;
         this.knowledgeArticleRepository = knowledgeArticleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.demoUsersEnabled = demoUsersEnabled;
+        this.studentUsername = studentUsername;
+        this.studentPassword = studentPassword;
+        this.tutorUsername = tutorUsername;
+        this.tutorPassword = tutorPassword;
+        this.adminUsername = adminUsername;
+        this.adminPassword = adminPassword;
     }
 
     @Override
@@ -32,55 +58,67 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedDemoUsers() {
-        String tutorSubjects = String.join(", ", Courses.OFFERED);
+        if (!demoUsersEnabled) {
+            return;
+        }
+        DemoAccount student = demoAccount(studentUsername, studentPassword, "STUDENT", null, 100);
+        DemoAccount tutor = demoAccount(tutorUsername, tutorPassword, "TUTOR",
+                String.join(", ", Courses.OFFERED), 100);
+        DemoAccount admin = demoAccount(adminUsername, adminPassword, "ADMIN", null, 0);
+        if (student == null || tutor == null || admin == null || !distinct(student, tutor, admin)) {
+            System.out.println("Demo user seeding skipped. Set a distinct username and a password of at least 10 characters for each local account.");
+            return;
+        }
         if (userRepository.count() > 0) {
-            backfillDemo("student1", "student1@rapidtutor.local");
-            backfillDemo("tutor1", "tutor1@rapidtutor.local");
-            backfillDemo("admin", "admin@rapidtutor.local");
-            User tutor = userRepository.findByUsername("tutor1");
-            if (tutor != null && !tutorSubjects.equals(tutor.getSubjects())) {
-                tutor.setSubjects(tutorSubjects);
-                userRepository.save(tutor);
-            }
             return;
         }
-
-        userRepository.save(demoUser("student1", "student1@rapidtutor.local", "STUDENT", null, 100));
-        userRepository.save(demoUser("tutor1", "tutor1@rapidtutor.local", "TUTOR", tutorSubjects, 100));
-        userRepository.save(demoUser("admin", "admin@rapidtutor.local", "ADMIN", null, 0));
-
-        System.out.println("Synthetic test accounts loaded successfully.");
+        userRepository.save(student.toUser(passwordEncoder));
+        userRepository.save(tutor.toUser(passwordEncoder));
+        userRepository.save(admin.toUser(passwordEncoder));
+        System.out.println("Local demo accounts loaded successfully.");
     }
 
-    private void backfillDemo(String username, String email) {
-        User user = userRepository.findByUsername(username);
-        if (user == null) {
-            return;
+    private static DemoAccount demoAccount(String username, String password, String role, String subjects,
+                                           int tokenBalance) {
+        if (username == null || password == null) {
+            return null;
         }
-        boolean changed = false;
-        if (user.getEmail() == null) {
-            user.setEmail(email);
-            changed = true;
+        String cleanUsername = username.trim();
+        String cleanPassword = password.trim();
+        if (cleanUsername.isEmpty() || cleanPassword.equalsIgnoreCase("password")) {
+            return null;
         }
-        if (user.getDisplayName() == null || user.getDisplayName().isBlank()) {
+        String email = cleanUsername + "@rapidtutor.local";
+        if (PasswordRules.violation(cleanPassword, cleanUsername, email) != null) {
+            return null;
+        }
+        return new DemoAccount(cleanUsername, email, cleanPassword, role, subjects, tokenBalance);
+    }
+
+    static boolean acceptableLocalAccount(String username, String password) {
+        return demoAccount(username, password, "STUDENT", null, 100) != null;
+    }
+
+    private static boolean distinct(DemoAccount student, DemoAccount tutor, DemoAccount admin) {
+        String studentName = student.username.toLowerCase(Locale.ROOT);
+        String tutorName = tutor.username.toLowerCase(Locale.ROOT);
+        String adminName = admin.username.toLowerCase(Locale.ROOT);
+        return !studentName.equals(tutorName) && !studentName.equals(adminName) && !tutorName.equals(adminName);
+    }
+
+    private record DemoAccount(String username, String email, String password, String role, String subjects,
+                               int tokenBalance) {
+        private User toUser(PasswordEncoder passwordEncoder) {
+            User user = new User();
+            user.setUsername(username);
             user.setDisplayName(username);
-            changed = true;
+            user.setEmail(email);
+            user.setPassword(passwordEncoder.encode(password));
+            user.setRole(role);
+            user.setSubjects(subjects);
+            user.setTokenBalance(tokenBalance);
+            return user;
         }
-        if (changed) {
-            userRepository.save(user);
-        }
-    }
-
-    private User demoUser(String username, String email, String role, String subjects, int tokenBalance) {
-        User user = new User();
-        user.setUsername(username);
-        user.setDisplayName(username);
-        user.setEmail(email);
-        user.setPassword(passwordEncoder.encode("password"));
-        user.setRole(role);
-        user.setSubjects(subjects);
-        user.setTokenBalance(tokenBalance);
-        return user;
     }
 
     /** Inserts an article only when that course and topic are not already stored. */

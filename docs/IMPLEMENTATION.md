@@ -1,6 +1,6 @@
 # LearnIT implementation
 
-Status as of October 23, 2026.
+Status as of October 31, 2026.
 
 LearnIT is a Spring Boot MVC application. A student tries to clear a course blocker before a person is involved. They name the blocker, Soquacktic writes one diagnostic note and can reply once to what the student types, and the student either writes what changed or asks for a peer tutor. Each attempt is kept on the student's **My blockers** page. The shared databank keeps course notes and those diagnostic notes. Nothing in that flow stops a student from getting help from a tutor somewhere else.
 
@@ -10,29 +10,29 @@ An administrator approves tutors and keeps accounts working. That management is 
 
 | Layer | Technology | Main types |
 | --- | --- | --- |
-| Pages | Thymeleaf, Bootstrap 5, `app.css` | `templates/student/*`, `templates/tutor/*`, `templates/admin/*`, account pages |
+| Pages | Thymeleaf, Bootstrap 5 from `static/vendor`, `app.css` | `templates/student/*`, `templates/tutor/*`, `templates/admin/*`, account pages |
 | Security | Form login, BCrypt via a delegating encoder, role rules | `SecurityConfig`, `CustomAuthenticationSuccessHandler`, `MustChangePasswordInterceptor` |
 | HTTP | Spring MVC | `AccountController`, `StudentController`, `TutorController`, `AdminController`, `NotificationController`, `KnowledgeAPIController` |
 | Rules | Transactions and a scheduled expiration sweep | `EconomyService`, `MeetingOfferService`, `AccountService`, `TriageCloseService`, `RequestExpiration` |
 | Notes | Groq diagnostic note through `RestClient`, with an offline fallback | `AiDiagnosisService`, `SocraticNotes`, `DiagnosticNoteChecker` |
 | Data | H2 file at `./data/rapidtutor`, `ddl-auto=update` | `DuckDraft`, `TutoringRequest`, `MeetingOffer`, `KnowledgeArticle`, and the repositories under `com.rapidtutor.repository` |
-| Seed | Demo users and course articles on startup | `DataSeeder` |
+| Seed | Course articles on startup. Optional local accounts when `rapidtutor.demo-users.enabled` is true | `DataSeeder` |
 
-Passwords are stored with BCrypt. Demo accounts use `password`. A new account receives a recovery code, shown once, which can reset the password at `/forgot-password`. An administrator created from the overview page must change that temporary password before using the rest of the app.
+Passwords are stored with BCrypt. A new account receives a recovery code, shown once, which can reset the password at `/forgot-password`. An administrator created from the overview page must change that temporary password before using the rest of the app. Optional local accounts are not in the repository. They are read from gitignored `application-local.properties` and inserted only when the users table is empty.
 
-`ddl-auto=update` adds tables and columns. It does not drop old columns or widen existing ones. A database created before request descriptions allowed 2000 characters and review feedback allowed 1000 keeps the old 255-character columns. Delete the `data/` folder to start clean.
+`ddl-auto=update` adds tables and columns. It does not drop old columns or widen existing ones. `LegacyColumnWiden` widens `TUTORING_REQUEST.SHORT_DESCRIPTION` to 2000 and `REVIEW.FEEDBACK` to 1000 on startup when those columns are still shorter. `schema.sql` adds `USERS.VERSION` when that column is missing. Delete the `data/` folder when you want an empty database, not because those columns stayed narrow.
 
 ## Accounts
 
 | Role | How it is created | After login |
 | --- | --- | --- |
-| `STUDENT` | `/register`, or seeded `student1` | `/student/dashboard` (My blockers) |
+| `STUDENT` | `/register` | `/student/dashboard` (My blockers) |
 | `APPLICANT` | `/apply/tutor` | `/apply/status` until an admin decides |
-| `TUTOR` | Admin approves an applicant, or seeded `tutor1` | `/tutor/board` |
+| `TUTOR` | Admin approves an applicant | `/tutor/board` |
 | `DECLINED` | Admin declines an applicant | `/apply/status` |
-| `ADMIN` | Seeded `admin`, or created from the overview | `/admin` |
+| `ADMIN` | Created from the overview, after an administrator already exists | `/admin` |
 
-Public registration creates students only. A student starts with 100 tokens. A tutor applicant starts with 0 and lists courses from `Courses.OFFERED`. Approval copies those courses onto `User.subjects` and sends a notification. The applicant's current session still carries the applicant role, so `/apply/status` tells an approved tutor to sign out and sign in again before opening the board. Seeded `tutor1` already covers every offered course.
+Public registration creates students only. A student starts with 100 tokens. A tutor applicant starts with 0 and lists courses from `Courses.OFFERED`. Approval copies those courses onto `User.subjects` and sends a notification. The applicant's current session still carries the applicant role, so `/apply/status` tells an approved tutor to sign out and sign in again before opening the board. The first administrator on a machine is the optional local admin account. When those local accounts are enabled, the local student and tutor start with 100 tokens, the tutor is given every offered course, and the local admin starts with 0. Seeding skips, and prints a line, when a username or password is missing, a password fails `PasswordRules`, or the three usernames are not distinct. It does not insert accounts when the users table already has rows.
 
 A duplicate username or email that reaches the database's unique constraint, such as two sign-ups at once, is shown as the same form message as the normal duplicate check.
 
@@ -95,7 +95,7 @@ An open request with no offers reloads its details page every 30 seconds to pick
 
 `GET /student/knowledge` lists the shared notes. A triage article shows the course, the topic, the label Soquacktic, and the diagnostic note. It does not show the student's description or answer. Seeded course notes still show their question and solution.
 
-`GET /api/knowledge/search?topic=&course=` returns at most one article whose course is one of the offered courses and whose topic contains the text. Talk it through calls it 300 ms after the student stops typing the topic. For a triage row, the form skips the stored question, including an older row that already contains a student's paragraph.
+`GET /api/knowledge/search?topic=&course=` returns at most one article whose course is one of the offered courses and whose topic contains the text. Talk it through calls it 300 ms after the student stops typing, and only when the topic is longer than 3 characters. For a triage row, the form skips the stored question, including an older row that already contains a student's paragraph.
 
 ## Admin
 

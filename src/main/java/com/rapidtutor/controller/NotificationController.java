@@ -40,18 +40,30 @@ public class NotificationController {
                            Principal principal) {
         User user = requireUser(principal);
         Notification notification = notificationRepository.findById(id).orElse(null);
-        if (notification != null && user.getId().equals(notification.getRecipientUserId()) && notification.getReadAt() == null) {
+        boolean recipient = notification != null && user.getId().equals(notification.getRecipientUserId());
+        if (recipient && notification.getReadAt() == null) {
             notification.setReadAt(LocalDateTime.now());
             notificationRepository.save(notification);
         }
-        if (follow && notification != null && isInternalPath(notification.getLink())) {
+        if (follow && recipient && isInternalPath(notification.getLink())) {
             return "redirect:" + notification.getLink();
         }
         return "redirect:/notifications";
     }
 
     private boolean isInternalPath(String link) {
-        return link != null && link.startsWith("/") && !link.startsWith("//") && !link.contains("://");
+        if (link == null || !link.startsWith("/") || link.startsWith("//")) {
+            return false;
+        }
+        if (link.indexOf('\\') >= 0 || link.contains("://")) {
+            return false;
+        }
+        for (int i = 0; i < link.length(); i++) {
+            if (Character.isWhitespace(link.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private User requireUser(Principal principal) {

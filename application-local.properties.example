@@ -1,0 +1,15 @@
+# Copy this file to application-local.properties. That copy is gitignored.
+# Leave the Groq key blank to use the offline diagnostic note.
+
+groq.api.key=
+
+# Local accounts are created only when enabled is true, every value below is set,
+# and the users table is empty. Use a distinct username and a password of at least
+# 10 characters for each account. Do not use the password "password".
+rapidtutor.demo-users.enabled=false
+rapidtutor.demo-users.student.username=
+rapidtutor.demo-users.student.password=
+rapidtutor.demo-users.tutor.username=
+rapidtutor.demo-users.tutor.password=
+rapidtutor.demo-users.admin.username=
+rapidtutor.demo-users.admin.password=

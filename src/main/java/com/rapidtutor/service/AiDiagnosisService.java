@@ -11,6 +11,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 @Service
 public class AiDiagnosisService {
@@ -32,13 +33,20 @@ public class AiDiagnosisService {
             Do not give the final answer, a worked solution, or code that completes the assignment. If their explanation already resolves the blocker, say they can stop here in Starting step, without writing the solution.
             """;
 
+    /** Hung diagnosis calls must leave Tomcat threads free for /login. */
+    private static final int MAX_IN_FLIGHT = 8;
+
     private final RestClient restClient;
+    private final Semaphore inFlight = new Semaphore(MAX_IN_FLIGHT);
 
     @Value("${groq.api.key:mock-key}")
     private String apiKey;
 
     @Value("${groq.model:openai/gpt-oss-20b}")
     private String model;
+
+    @Value("${groq.api.base-url:https://api.groq.com/openai/v1/chat/completions}")
+    private String baseUrl;
 
     public AiDiagnosisService(RestClient.Builder builder) {
         HttpClient httpClient = HttpClient.newBuilder()
@@ -66,12 +74,18 @@ public class AiDiagnosisService {
         if (apiKey == null || apiKey.isBlank() || "mock-key".equals(apiKey)) {
             return fallback;
         }
+        if (!inFlight.tryAcquire()) {
+            log.warn("Diagnosis is already at {} in-flight calls; using the offline note", MAX_IN_FLIGHT);
+            return fallback;
+        }
         try {
             String result = askGroq(systemPrompt, userMessage);
             return DiagnosticNoteChecker.accepts(result) ? result : fallback;
         } catch (Exception e) {
             log.warn("AI diagnosis failed: {}", e.getMessage());
             return fallback;
+        } finally {
+            inFlight.release();
         }
     }
 
@@ -85,7 +99,7 @@ public class AiDiagnosisService {
         );
 
         Map<?, ?> response = restClient.post()
-                .uri("https://api.groq.com/openai/v1/chat/completions")
+                .uri(baseUrl)
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
                 .body(requestBody)

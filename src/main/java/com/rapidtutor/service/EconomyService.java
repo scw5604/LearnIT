@@ -8,6 +8,11 @@ import com.rapidtutor.repository.MeetingOfferRepository;
 import com.rapidtutor.repository.ReviewRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.OptimisticLockException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,16 +30,19 @@ public class EconomyService {
     private final MeetingOfferRepository offerRepository;
     private final RequestLifecycle lifecycle;
     private final NotificationService notificationService;
+    private final EntityManager entityManager;
 
     public EconomyService(UserRepository userRepository, TutoringRequestRepository requestRepository,
                           ReviewRepository reviewRepository, MeetingOfferRepository offerRepository,
-                          RequestLifecycle lifecycle, NotificationService notificationService) {
+                          RequestLifecycle lifecycle, NotificationService notificationService,
+                          EntityManager entityManager) {
         this.userRepository = userRepository;
         this.requestRepository = requestRepository;
         this.reviewRepository = reviewRepository;
         this.offerRepository = offerRepository;
         this.lifecycle = lifecycle;
         this.notificationService = notificationService;
+        this.entityManager = entityManager;
     }
 
     /** Deducts bounty from the student and creates the request in one transaction. */
@@ -71,7 +79,7 @@ public class EconomyService {
         }
 
         student.setTokenBalance(currentBalance - offeredBounty);
-        userRepository.save(student);
+        saveUser(student);
 
         request.setStudentId(student.getId());
         request.setBountyValue(offeredBounty);
@@ -162,7 +170,7 @@ public class EconomyService {
         int currentBalance = tutor.getTokenBalance() != null ? tutor.getTokenBalance() : 0;
         int bounty = request.getBountyValue() != null ? request.getBountyValue() : 0;
         tutor.setTokenBalance(currentBalance + bounty);
-        userRepository.save(tutor);
+        saveUser(tutor);
 
         request.setStatus("RESOLVED");
         request.setResolvedTimestamp(LocalDateTime.now());
@@ -194,7 +202,7 @@ public class EconomyService {
                 .orElseThrow(() -> new IllegalArgumentException("Student not found."));
         int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
         student.setTokenBalance(currentBalance + REVIEW_REWARD);
-        userRepository.save(student);
+        saveUser(student);
     }
 
     /** Refunds the bounty and marks the request canceled. */
@@ -264,6 +272,20 @@ public class EconomyService {
         int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
         int bounty = request.getBountyValue() != null ? request.getBountyValue() : 0;
         student.setTokenBalance(currentBalance + bounty);
-        userRepository.save(student);
+        saveUser(student);
+    }
+
+    /**
+     * A second session already wrote this balance. Tell the page to reload instead of returning 500.
+     */
+    private void saveUser(User user) {
+        try {
+            entityManager.lock(user, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+            userRepository.saveAndFlush(user);
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException e) {
+            throw new IllegalStateException("This request changed. Open it and try again.");
+        } catch (OptimisticLockingFailureException e) {
+            throw new IllegalStateException("This request changed. Open it and try again.");
+        }
     }
 }

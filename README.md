@@ -8,7 +8,7 @@ Administrators approve tutors and keep accounts working. That management is how 
 
 - **Backend:** Java 21, Spring Boot 4.1.1 (Spring Web, Spring Security, Spring Data JPA)
 - **Database:** Embedded H2 (file-based)
-- **Frontend:** Thymeleaf, Bootstrap 5 (CDN)
+- **Frontend:** Thymeleaf, Bootstrap 5 served from `src/main/resources/static/vendor`, and `css/app.css`
 
 ## Prerequisites
 
@@ -22,9 +22,13 @@ Administrators approve tutors and keep accounts working. That management is how 
 3. Start the app:
    - **Windows:** `mvnw.cmd spring-boot:run`
    - **macOS / Linux:** `./mvnw spring-boot:run`
-4. On a **fresh** database, the console prints when demo users and the knowledge bank are seeded. If you already have a local `data/` folder from a previous run, those messages will not appear.
+4. On a **fresh** database, the console prints `Knowledge bank loaded successfully` when course notes are inserted. It prints `Local demo accounts loaded successfully.` only when `application-local.properties` enables those accounts and the users table is empty. If `data/` already has those rows, those lines do not appear.
 
-A diagnostic note is required before a request exists. **Name a blocker** on the student home opens Talk it through, which stores that note. If `GROQ_API_KEY` is unset, or the reply cannot be shown, the app uses the offline note. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and start the app with that variable set. The key is not stored in the project.
+Leave port 8080 free. A second start while the first process is using `data/` exits with `LearnIT is already running. Stop the other copy before starting this one.` On macOS or Linux, `./mvnw` has to be executable.
+
+Run the tests from that same folder: `mvnw.cmd test` on Windows, or `./mvnw test` on macOS or Linux.
+
+A diagnostic note is required before a request exists. **Name a blocker** on the student home opens Talk it through, which stores that note. The app uses the offline note when `groq.api.key` is blank, `mock-key`, or unset, and when a live reply cannot be shown. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and set `groq.api.key` in `application-local.properties`. You can instead set `GROQ_API_KEY` in the environment, as long as that local file does not set `groq.api.key` itself. The key is not stored in git.
 
 ## Accessing the application
 
@@ -35,23 +39,13 @@ A diagnostic note is required before a request exists. **Name a blocker** on the
   Username: `sa`  
   Password: (leave blank)
 
-Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. That approval is platform management. An approved applicant signs out and signs in again to open the tutor board. A session is claimed when the student accepts that time. Seeded `tutor1` can offer times immediately.
+Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. That approval is platform management. An approved applicant signs out and signs in again to open the tutor board. A session is claimed when the student accepts that time.
 
-## Default test accounts
-
-`DataSeeder` inserts these users when the `users` table is empty:
-
-Passwords are stored with BCrypt. If you already have a `data/` folder from an older run, stop the app, delete that folder, and start again so these accounts are reseeded.
-
-| Role | Username | Password | Use |
-|---|---|---|---|
-| Student | `student1` | `password` | Name a blocker, talk it through, use the databank, or post a request |
-| Tutor | `tutor1` | `password` | Offer times for HCDD 412, IST 440W, IST 311, HCDD 411, HCDD 331, and IST 230 |
-| Admin | `admin` | `password` | Approve tutors, overview, and insights |
+Optional accounts for your own machine are read from `application-local.properties` when `rapidtutor.demo-users.enabled` is true. Copy `application-local.properties.example` and set a distinct username and a password of at least 10 characters for the student, tutor, and admin. Do not use the password `password`. That file is gitignored. Those accounts are inserted only when every value is set and the users table is empty. The local student and tutor start with 100 tokens, and that tutor is given every offered course. The local admin starts with 0 tokens. A fresh clone without that file has no pre-created logins.
 
 ## Architecture and database notes
 
-- H2 writes to `./data/rapidtutor`. That folder is gitignored so each machine gets its own empty database and seeder run.
-- The knowledge bank is seeded independently of users. If demo accounts already exist but articles do not, articles are still loaded.
-- To reset everything (users, tokens, blockers, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again.
-- Delete `data/` after pulling this version. `ddl-auto=update` adds the new blocker table, but it does not widen existing columns. An older database keeps 255-character limits on request descriptions and review feedback, so longer entries fail.
+- H2 writes to `./data/rapidtutor`. That folder is gitignored so each machine gets its own database.
+- The knowledge bank is seeded independently of users. Missing course notes are still inserted when the users table already has rows.
+- To reset everything (users, tokens, blockers, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again. Local demo accounts are created again only when `application-local.properties` enables them.
+- On startup, an older database gets wider columns for request descriptions (2000 characters) and review feedback (1000 characters), and a `VERSION` column on `USERS` when that column is missing. You do not need to delete `data/` for those updates.
