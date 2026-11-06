@@ -14,6 +14,7 @@ import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.config.H2AlreadyRunningAnalyzer;
 import com.rapidtutor.config.LegacyColumnWiden;
 import com.rapidtutor.model.DuckDraft;
+import com.rapidtutor.model.KnowledgeArticle;
 import com.rapidtutor.model.Notification;
 import com.rapidtutor.model.Review;
 import com.rapidtutor.service.AiDiagnosisService;
@@ -68,6 +69,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
@@ -852,7 +854,8 @@ class PlatformRulesTests {
                         .param("studentExplanation", "I forgot to increment the counter."))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Follow-up")))
-                .andExpect(content().string(containsString("Answer the question above, then walk it through.")))
+                .andExpect(content().string(containsString("You can go to a tutor, or record what changed.")))
+                .andExpect(content().string(not(containsString("Walk it through"))))
                 .andExpect(content().string(containsString("I forgot to increment the counter.")))
                 .andExpect(content().string(containsString("Loop counters is the idea to clarify")))
                 .andExpect(content().string(containsString("I'm still stuck")))
@@ -979,7 +982,7 @@ class PlatformRulesTests {
 
         mockMvc.perform(get("/tutor/requests/" + request.getId()).with(user("tutor1").roles("TUTOR")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("AI lesson scaffold")))
+                .andExpect(content().string(containsString("The student already saw this note.")))
                 .andExpect(content().string(containsString("Addition combines two quantities.")))
                 .andExpect(content().string(containsString("I added the numbers in the wrong order.")));
 
@@ -1755,6 +1758,150 @@ class PlatformRulesTests {
     }
 
     @Test
+    void searchPrefersTheNewestTriageNoteOverASeededArticle() throws Exception {
+        KnowledgeArticle seeded = knowledgeArticleRepository.save(new KnowledgeArticle(
+                "HCDD 412",
+                "Zzz triage preference course note",
+                "A past question about the same words.",
+                "A seeded explanation."));
+        KnowledgeArticle triage = new KnowledgeArticle(
+                "HCDD 412",
+                "Zzz triage preference",
+                "Zzz triage preference",
+                SocraticNotes.offline("Zzz triage preference").trim());
+        triage.setKind("triage");
+        triage = knowledgeArticleRepository.save(triage);
+
+        mockMvc.perform(get("/api/knowledge/search")
+                        .param("course", "HCDD 412")
+                        .param("topic", "Zzz triage preference")
+                        .with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(triage.getId().intValue()))
+                .andExpect(jsonPath("$[0].kind").value("triage"));
+        assertFalse(seeded.getId().equals(triage.getId()));
+    }
+
+    @Test
+    void solvingTheSameTopicTwiceKeepsOneTriageNote() throws Exception {
+        MockHttpSession first = duckSession("Dedupe topic", "I am stuck on the concept.");
+        mockMvc.perform(post("/student/requests/duck/solved")
+                        .session(first)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "The first attempt.")
+                        .param("takeaway", "First pass."))
+                .andExpect(redirectedUrl("/student/dashboard"));
+
+        MockHttpSession second = duckSession("Dedupe topic", "I am stuck on the concept.");
+        mockMvc.perform(post("/student/requests/duck/reply")
+                        .session(second)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("studentExplanation", "I named the loop variable."))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/student/requests/duck/solved")
+                        .session(second)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("takeaway", "Second pass."))
+                .andExpect(redirectedUrl("/student/dashboard"));
+
+        var articles = knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Dedupe topic");
+        assertEquals(1, articles.size());
+        assertEquals(SocraticNotes.offlineFollowUp("Dedupe topic", "I named the loop variable.").trim(),
+                articles.get(0).getVerifiedSolution());
+    }
+
+    @Test
+    void thisWasEnoughClosesATriageNoteWithoutAnotherArticle() throws Exception {
+        KnowledgeArticle triage = new KnowledgeArticle(
+                "HCDD 412",
+                "Enough topic",
+                "Enough topic",
+                SocraticNotes.offline("Enough topic").trim());
+        triage.setKind("triage");
+        triage = knowledgeArticleRepository.save(triage);
+        long articles = knowledgeArticleRepository.count();
+
+        mockMvc.perform(post("/student/requests/duck/enough")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("articleId", triage.getId().toString())
+                        .param("takeaway", "The earlier note was enough."))
+                .andExpect(redirectedUrl("/student/dashboard"))
+                .andExpect(flash().attributeExists("successMessage"));
+
+        assertEquals(0, requestRepository.count());
+        assertEquals(articles, knowledgeArticleRepository.count());
+        DuckDraft draft = duckDraftRepository.findByStudentIdOrderByCreatedAtDesc(
+                userRepository.findByUsername("student1").getId()).get(0);
+        assertEquals("SOLVED", draft.getOutcome());
+        assertEquals("Cleared from an earlier note.", draft.getDescription());
+        assertEquals("The earlier note was enough.", draft.getTakeaway());
+        assertEquals(SocraticNotes.offline("Enough topic").trim(), draft.getNote());
+
+        KnowledgeArticle seeded = knowledgeArticleRepository.save(new KnowledgeArticle(
+                "HCDD 412", "Seeded enough", "A question", "A solution"));
+        mockMvc.perform(post("/student/requests/duck/enough")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("articleId", seeded.getId().toString())
+                        .param("takeaway", "This should be rejected."))
+                .andExpect(redirectedUrl("/student/requests/new"))
+                .andExpect(flash().attribute("errorMessage", "That note cannot close this."));
+        assertEquals(1, duckDraftRepository.count());
+    }
+
+    @Test
+    void continueOpensATryingDraftAndRefusesTheOthers() throws Exception {
+        MockHttpSession session = duckSession("Resume topic", "I am stuck on the concept.");
+        Long id = duckDraftRepository.findByStudentIdOrderByCreatedAtDesc(
+                userRepository.findByUsername("student1").getId()).get(0).getId();
+
+        mockMvc.perform(get("/student/drafts/" + id).with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Resume topic is the idea to clarify")))
+                .andExpect(content().string(containsString("You can walk it through once")));
+
+        saveStudent("resume-other");
+        mockMvc.perform(get("/student/drafts/" + id).with(user("resume-other").roles("STUDENT")))
+                .andExpect(redirectedUrl("/student/dashboard"))
+                .andExpect(flash().attribute("errorMessage", "You cannot continue that one."));
+
+        mockMvc.perform(post("/student/requests/duck/solved")
+                        .session(session)
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf())
+                        .param("takeaway", "I can resume until this is solved."))
+                .andExpect(redirectedUrl("/student/dashboard"));
+        mockMvc.perform(get("/student/drafts/" + id).with(user("student1").roles("STUDENT")))
+                .andExpect(redirectedUrl("/student/dashboard"))
+                .andExpect(flash().attribute("errorMessage", "You cannot continue that one."));
+    }
+
+    @Test
+    void aCanceledRequestIsNotLabeledWithATutor() throws Exception {
+        User student = userRepository.findByUsername("student1");
+        TutoringRequest request = requestRepository.save(newRequest(student, "HCDD 412", "Label after cancel"));
+        DuckDraft draft = DuckDraft.from(request, SocraticNotes.offline("Label after cancel"), student.getId());
+        draft.setOutcome(DuckDraft.ESCALATED);
+        draft.setRequestId(request.getId());
+        duckDraftRepository.save(draft);
+
+        mockMvc.perform(post("/student/requests/" + request.getId() + "/cancel")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf()))
+                .andExpect(redirectedUrl("/student/dashboard"));
+
+        mockMvc.perform(get("/student/dashboard").with(user("student1").roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Canceled")))
+                .andExpect(content().string(not(containsString("With a tutor"))));
+    }
+
+    @Test
     void ownerSavesATakeawayAfterTheSessionIsResolved() throws Exception {
         User student = userRepository.findByUsername("student1");
         DuckDraft draft = escalatedDraft(student, "Takeaway topic");
@@ -1777,7 +1924,7 @@ class PlatformRulesTests {
                         .with(csrf())
                         .param("takeaway", "Not my blocker."))
                 .andExpect(redirectedUrl("/student/dashboard"))
-                .andExpect(flash().attribute("errorMessage", "That blocker cannot be closed yet."));
+                .andExpect(flash().attribute("errorMessage", "That one cannot be closed yet."));
         assertNull(duckDraftRepository.findById(draft.getId()).orElseThrow().getTakeaway());
     }
 

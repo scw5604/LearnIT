@@ -75,6 +75,10 @@ public class StudentController {
         this.draftRepository = draftRepository;
     }
 
+    /**
+     * Opening Talk it through drops the session draft id.
+     * The Trying row remains until the student chooses Continue.
+     */
     @GetMapping("/requests/new")
     public String showRequestForm(Model model, HttpSession session) {
         clearDuck(session);
@@ -146,7 +150,7 @@ public class StudentController {
             draftRepository.save(draft);
             clearDuck(session);
             redirectAttributes.addFlashAttribute("successMessage",
-                    "Saved to your blockers. The note was added to the databank.");
+                    "Saved. The note was added to the databank.");
             return "redirect:/student/dashboard";
         } catch (IllegalArgumentException e) {
             return duckForm(model, draft, studentExplanation, takeaway, e.getMessage(), bookingOpen(session));
@@ -181,6 +185,48 @@ public class StudentController {
         } catch (IllegalArgumentException e) {
             return duckForm(model, draft, studentExplanation, null, e.getMessage(), bookingOpen(session));
         }
+    }
+
+    @PostMapping("/requests/duck/enough")
+    public String enoughFromNote(@RequestParam(required = false) Long articleId,
+                                 @RequestParam(required = false) String takeaway,
+                                 Principal principal, RedirectAttributes redirectAttributes) {
+        User student = requireStudent(principal);
+        KnowledgeArticle article = articleId == null
+                ? null
+                : knowledgeArticleRepository.findById(articleId).orElse(null);
+        if (article == null || !KnowledgeBankService.TRIAGE.equals(article.getKind())) {
+            redirectAttributes.addFlashAttribute("errorMessage", "That note cannot close this.");
+            return "redirect:/student/requests/new";
+        }
+        try {
+            String cleanTakeaway = requiredTakeaway(takeaway);
+            draftRepository.save(DuckDraft.clearedFromNote(
+                    article.getCourse(),
+                    article.getTopic(),
+                    article.getVerifiedSolution(),
+                    cleanTakeaway,
+                    student.getId()));
+            redirectAttributes.addFlashAttribute("successMessage", "Saved.");
+            return "redirect:/student/dashboard";
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            return "redirect:/student/requests/new";
+        }
+    }
+
+    @GetMapping("/drafts/{id}")
+    public String continueDraft(@PathVariable Long id, Principal principal, Model model, HttpSession session,
+                                RedirectAttributes redirectAttributes) {
+        User student = requireStudent(principal);
+        DuckDraft draft = draftRepository.findByIdAndStudentId(id, student.getId()).orElse(null);
+        if (draft == null || !DuckDraft.TRYING.equals(draft.getOutcome())) {
+            redirectAttributes.addFlashAttribute("errorMessage", "You cannot continue that one.");
+            return "redirect:/student/dashboard";
+        }
+        session.setAttribute(DuckDraft.SESSION_KEY, draft.getId());
+        session.removeAttribute(DuckDraft.BOOKING_KEY);
+        return duckForm(model, draft, null, null, null, false);
     }
 
     @PostMapping("/requests")
@@ -229,7 +275,7 @@ public class StudentController {
         User student = requireStudent(principal);
         DuckDraft draft = draftRepository.findByIdAndStudentId(id, student.getId()).orElse(null);
         if (draft == null || !DuckDraft.ESCALATED.equals(draft.getOutcome()) || draft.getRequestId() == null) {
-            redirectAttributes.addFlashAttribute("errorMessage", "That blocker cannot be closed yet.");
+            redirectAttributes.addFlashAttribute("errorMessage", "That one cannot be closed yet.");
             return "redirect:/student/dashboard";
         }
         TutoringRequest request = requestRepository.findById(draft.getRequestId()).orElse(null);

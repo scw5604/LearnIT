@@ -1,8 +1,8 @@
 # LearnIT implementation
 
-Status as of October 31, 2026.
+Status as of November 3, 2026.
 
-LearnIT is a Spring Boot MVC application. A student tries to clear a course blocker before a person is involved. They name the blocker, Soquacktic writes one diagnostic note and can reply once to what the student types, and the student either writes what changed or asks for a peer tutor. Each attempt is kept on the student's **My blockers** page. The shared databank keeps course notes and those diagnostic notes. Nothing in that flow stops a student from getting help from a tutor somewhere else.
+LearnIT is a Spring Boot MVC application. A student tries to clear a course problem before a person is involved. They name what they are stuck on, Soquacktic writes one diagnostic note and can reply once to what the student types, and the student either writes what changed or asks for a peer tutor. Each attempt is kept on the student's **What I'm stuck on** page. The shared databank keeps course notes and those diagnostic notes. Nothing in that flow stops a student from getting help from a tutor somewhere else.
 
 An administrator approves tutors and keeps accounts working. That management is how the platform runs. It is not the innovation.
 
@@ -26,7 +26,7 @@ Passwords are stored with BCrypt. A new account receives a recovery code, shown 
 
 | Role | How it is created | After login |
 | --- | --- | --- |
-| `STUDENT` | `/register` | `/student/dashboard` (My blockers) |
+| `STUDENT` | `/register` | `/student/dashboard` (What I'm stuck on) |
 | `APPLICANT` | `/apply/tutor` | `/apply/status` until an admin decides |
 | `TUTOR` | Admin approves an applicant | `/tutor/board` |
 | `DECLINED` | Admin declines an applicant | `/apply/status` |
@@ -40,13 +40,13 @@ A duplicate username or email that reaches the database's unique constraint, suc
 
 ## Student flow
 
-The student home is **My blockers** at `/student/dashboard`. Its primary action is **Name a blocker**. A **Sessions** link opens `/student/requests`, the list of tutoring requests.
+The student home is **What I'm stuck on** at `/student/dashboard`. Its primary action is **I'm stuck**. Opening a request from a card returns with **Back**. The old request list is not linked from the student pages.
 
 ```mermaid
 flowchart LR
-    name["Name a blocker"] --> duck["Talk it through"]
-    duck -->|"I figured it out + what changed"| SOLVED["Blocker SOLVED"]
-    duck -->|"I'm still stuck, then Post request"| ESCALATED["Blocker ESCALATED"]
+    name["I'm stuck"] --> duck["Talk it through"]
+    duck -->|"I figured it out + what changed"| SOLVED["Solved"]
+    duck -->|"I'm still stuck, then Post request"| ESCALATED["With a tutor"]
     ESCALATED --> OPEN["Request OPEN"]
     OPEN -->|"Student closes from the note"| RESOLVED["RESOLVED"]
     OPEN -->|"Student accepts a time offer"| CLAIMED["CLAIMED"]
@@ -62,17 +62,16 @@ flowchart LR
 4. **I figured it out** requires a **What changed** entry of at most 500 characters. It calls `KnowledgeBankService.saveTriage` with the course, topic, and the note. The follow-up is the note when one exists. Otherwise the first note is stored. The student's description, answer, and takeaway are not copied into the article. The draft is marked `SOLVED` with the takeaway, and no request is posted.
 5. **I'm still stuck** (`POST /student/requests/duck/book`) requires the answer and then shows the booking fields: meeting method, response time, session length, and a bounty from 0 to 50. **Post request** (`POST /student/requests`) checks those through `RequestFields.booking`, escrows the bounty, stores the note and answer on the request, and records the `OPEN` event in one transaction. The server rejects a fourth open request. The draft is marked `ESCALATED` and keeps the new request id. A direct `POST /student/requests` without a draft in the session does not create a request.
 
-## Blockers
+## What I'm stuck on
 
-`DuckDraft` is the student's private record of a blocker: course, topic, description, note, follow-up, answer, takeaway, outcome, and an optional request id. Only its owner can load it. Nothing in it is shown to tutors or copied into the databank.
+`DuckDraft` is the student's private record of what they are stuck on: course, topic, description, note, follow-up, answer, takeaway, outcome, and an optional request id. Only its owner can load it. Nothing in it is shown to tutors or copied into the databank.
 
-My blockers lists the student's drafts, newest first, labeled **Trying**, **Solved**, or **With a tutor**. A card with a takeaway shows **When I was stuck** next to **What changed**. An escalated card links to its request. When that request is `RESOLVED`, the card offers a **What changed** box that posts to `/student/drafts/{id}/takeaway`.
+What I'm stuck on lists the student's drafts, newest first. A trying draft is **Trying** and can be continued. A solved draft is **Solved**. An escalated draft is **With a tutor** while its request is open or claimed, and **Canceled**, **Expired**, or **Resolved** when the request reaches that status. A card with a takeaway shows **When I was stuck** next to **What changed**. An escalated card links to its request. When that request is `RESOLVED`, the card offers a **What changed** box that posts to `/student/drafts/{id}/takeaway`.
 
 Current limits:
 
-- A `TRYING` draft has no link back to Talk it through. Leaving the page or choosing Start over leaves it on the list as Trying.
-- The **With a tutor** label comes from the draft outcome. It does not change when the linked request is canceled or expires.
-- Requests posted before blockers were stored have no draft. They appear only on the Sessions page.
+- Choosing Start over drops the session draft. The Trying row remains until the student chooses Continue.
+- Requests posted before these attempts were stored have no draft, so they have no card on What I'm stuck on. The student pages no longer link to the old request list.
 
 ## Request lifecycle
 
@@ -95,7 +94,7 @@ An open request with no offers reloads its details page every 30 seconds to pick
 
 `GET /student/knowledge` lists the shared notes. A triage article shows the course, the topic, the label Soquacktic, and the diagnostic note. It does not show the student's description or answer. Seeded course notes still show their question and solution.
 
-`GET /api/knowledge/search?topic=&course=` returns at most one article whose course is one of the offered courses and whose topic contains the text. Talk it through calls it 300 ms after the student stops typing, and only when the topic is longer than 3 characters. For a triage row, the form skips the stored question, including an older row that already contains a student's paragraph.
+`GET /api/knowledge/search?topic=&course=` returns at most one article whose course is one of the offered courses and whose topic contains the text. A triage note is chosen before a seeded course note. Talk it through calls it 300 ms after the student stops typing, and only when the topic is longer than 3 characters. The topic field's example changes with the course and is a phrase from that course's seeded note: UML Sequence Diagrams for HCDD 412, Sprint goal versus a task list for IST 440W, class versus object for IST 311, client versus server for HCDD 411, heuristic review for HCDD 331, and reading a truth table for IST 230. For a triage row, the form skips the stored question, including an older row that already contains a student's paragraph.
 
 ## Admin
 

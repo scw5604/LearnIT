@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head('LearnIT · Blockers')}"></head>
+<head th:replace="~{fragments/head :: head('LearnIT · Stuck')}"></head>
 <body class="rt-body">
 <div class="rt-shell">
     <div th:replace="~{fragments/app-nav :: navbar}"></div>
@@ -9,12 +9,11 @@
         <div class="container">
             <div class="rt-page-header">
                 <div>
-                    <h1>My blockers</h1>
+                    <h1>What I'm stuck on</h1>
                     <p>What you were stuck on, and what changed.</p>
                 </div>
                 <div class="d-flex align-items-center gap-3">
-                    <a th:href="@{/student/requests}">Sessions</a>
-                    <a th:href="@{/student/requests/new}" class="btn btn-rt-primary">Name a blocker</a>
+                    <a th:href="@{/student/requests/new}" class="btn btn-rt-primary">I'm stuck</a>
                 </div>
             </div>
 
@@ -31,7 +30,14 @@
                             <p class="rt-kicker mb-0" th:text="${draft.course}">HCDD 412</p>
                             <span class="rt-badge rt-badge-open" th:if="${draft.outcome == 'TRYING'}">Trying</span>
                             <span class="rt-badge rt-badge-resolved" th:if="${draft.outcome == 'SOLVED'}">Solved</span>
-                            <span class="rt-badge rt-badge-claimed" th:if="${draft.outcome == 'ESCALATED'}">With a tutor</span>
+                            <span class="rt-badge rt-badge-claimed"
+                                  th:if="${draft.outcome == 'ESCALATED' and requestStatuses.get(draft.requestId) != 'CANCELED' and requestStatuses.get(draft.requestId) != 'EXPIRED' and requestStatuses.get(draft.requestId) != 'RESOLVED'}">With a tutor</span>
+                            <span class="rt-badge rt-badge-resolved"
+                                  th:if="${draft.outcome == 'ESCALATED' and requestStatuses.get(draft.requestId) == 'RESOLVED'}">Resolved</span>
+                            <span class="rt-badge rt-badge-canceled"
+                                  th:if="${draft.outcome == 'ESCALATED' and requestStatuses.get(draft.requestId) == 'CANCELED'}">Canceled</span>
+                            <span class="rt-badge rt-badge-expired"
+                                  th:if="${draft.outcome == 'ESCALATED' and requestStatuses.get(draft.requestId) == 'EXPIRED'}">Expired</span>
                         </div>
                         <h2 th:text="${draft.topic}">Topic</h2>
 
@@ -60,6 +66,9 @@
                             <button type="submit" class="btn btn-sm btn-rt-primary">Save what changed</button>
                         </form>
 
+                        <div class="rt-actions mt-3" th:if="${draft.outcome == 'TRYING'}">
+                            <a th:href="@{/student/drafts/{id}(id=${draft.id})}" class="btn btn-sm btn-rt-primary">Continue</a>
+                        </div>
                         <div class="rt-actions" th:if="${draft.outcome == 'ESCALATED' and draft.requestId != null}">
                             <a th:href="@{/student/requests/{id}(id=${draft.requestId})}" class="btn btn-sm btn-rt-primary">Open the request</a>
                         </div>

@@ -63,6 +63,22 @@ public class DuckDraft {
         return draft;
     }
 
+    /** A solved attempt closed from a databank note, with no new diagnosis. */
+    public static DuckDraft clearedFromNote(String course, String topic, String note, String takeaway, Long studentId) {
+        DuckDraft draft = new DuckDraft();
+        draft.studentId = studentId;
+        draft.course = course;
+        draft.topic = topic;
+        draft.description = "Cleared from an earlier note.";
+        draft.note = note == null ? "" : note;
+        if (draft.note.length() > 2000) {
+            draft.note = draft.note.substring(0, 2000);
+        }
+        draft.takeaway = takeaway;
+        draft.outcome = SOLVED;
+        return draft;
+    }
+
     public TutoringRequest toRequest() {
         TutoringRequest request = new TutoringRequest();
         request.setCourse(course);

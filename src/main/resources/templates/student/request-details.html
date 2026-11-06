@@ -7,7 +7,7 @@
 
     <main class="rt-main">
         <div class="container">
-            <a class="rt-back" th:href="@{/student/requests}">Back to requests</a>
+            <a class="rt-back" th:href="@{/student/dashboard}">Back</a>
             <div class="row justify-content-center">
                 <div class="col-lg-8">
                     <div class="rt-panel">
@@ -50,8 +50,7 @@
 
                         <div class="mt-4" th:if="${request.status == 'OPEN'}">
                             <h3 class="h5 mb-1">Time offers</h3>
-                            <p class="rt-checking">Checking for offers</p>
-                            <p class="text-muted mb-0" th:if="${offers == null or #lists.isEmpty(offers)}">No tutors have offered a time yet.</p>
+                            <p class="rt-checking" th:if="${offers == null or #lists.isEmpty(offers)}">Checking for offers. This page reloads in 30 seconds.</p>
                             <div class="rt-offer-list" th:if="${offers != null and !#lists.isEmpty(offers)}">
                                 <form class="rt-offer"
                                       th:each="offer : ${offers}"

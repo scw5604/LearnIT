@@ -7,7 +7,7 @@
 
     <main class="rt-main">
         <div class="container">
-            <a class="rt-back" th:href="@{/student/dashboard}">Back to blockers</a>
+            <a class="rt-back" th:href="@{/student/dashboard}">Back</a>
             <div class="row justify-content-center">
                 <div class="col-lg-8">
                     <div class="rt-panel">
@@ -21,7 +21,8 @@
                             <p th:text="${tutoringRequest.shortDescription}">Description</p>
 
                             <div th:replace="~{fragments/diagnostic-note :: scaffold(${duckNote}, 'duck')}"></div>
-                            <p class="mt-3 mb-0">Answer the question above, then walk it through.</p>
+                            <p class="mt-3 mb-0" th:if="${duckReply == null}">You can walk it through once, or go to a tutor after this note.</p>
+                            <p class="mt-3 mb-0" th:if="${duckReply != null}">You can go to a tutor, or record what changed.</p>
                             <div th:if="${duckReply != null}">
                                 <div th:replace="~{fragments/diagnostic-note :: scaffold(${duckReply}, 'followup')}"></div>
                             </div>
@@ -38,7 +39,7 @@
                                               placeholder="What do you understand now?"
                                               th:text="${takeaway}"></textarea>
                                 </div>
-                                <button type="submit" class="btn btn-rt-primary w-100 mb-2" th:formaction="@{/student/requests/duck/reply}">Walk it through</button>
+                                <button type="submit" class="btn btn-rt-ghost w-100 mb-2" th:if="${duckReply == null}" th:formaction="@{/student/requests/duck/reply}">Walk it through</button>
                                 <div th:if="${bookingOpen}">
                                     <div class="row mb-1">
                                         <div class="col-md-4">
@@ -81,7 +82,7 @@
                                 </div>
                                 <button type="submit" class="btn btn-rt-ghost w-100 mb-2" th:unless="${bookingOpen}"
                                         th:formaction="@{/student/requests/duck/book}">I'm still stuck</button>
-                                <button type="submit" class="btn btn-rt-ghost w-100" th:formaction="@{/student/requests/duck/solved}">I figured it out</button>
+                                <button type="submit" class="btn btn-rt-primary w-100" th:formaction="@{/student/requests/duck/solved}">I figured it out</button>
                             </form>
                             <p class="text-center mt-3 mb-0">
                                 <a th:href="@{/student/requests/new}">Start over</a>
@@ -99,7 +100,7 @@
                             <div class="mb-3">
                                 <label class="form-label" for="topicInput">Topic</label>
                                 <input type="text" class="form-control" th:field="*{topic}" id="topicInput" required placeholder="e.g., UML Sequence Diagrams">
-                                <div id="deflectionResults" class="mt-2"></div>
+                                <div id="deflectionResults" class="mt-2" th:attr="data-csrf=${_csrf.token}"></div>
                             </div>
 
                             <div class="mb-4">
@@ -126,27 +127,131 @@
     const topicInput = document.getElementById('topicInput');
     const courseInput = document.getElementById('courseInput');
     const deflectionResults = document.getElementById('deflectionResults');
+    const topicExamples = {
+        'HCDD 412': 'UML Sequence Diagrams',
+        'IST 440W': 'Sprint goal versus a task list',
+        'IST 311': 'class versus object',
+        'HCDD 411': 'client versus server',
+        'HCDD 331': 'heuristic review',
+        'IST 230': 'reading a truth table'
+    };
+
+    function showTopicExample() {
+        const example = topicExamples[courseInput.value];
+        if (example) {
+            topicInput.placeholder = 'e.g., ' + example;
+        }
+    }
 
     function clearSuggestion() {
         deflectionResults.replaceChildren();
+    }
+
+    function sectionBody(text, label, nextLabel) {
+        const lower = text.toLowerCase();
+        const start = lower.indexOf(label.toLowerCase());
+        if (start < 0) {
+            return null;
+        }
+        const contentStart = start + label.length;
+        let contentEnd = text.length;
+        if (nextLabel) {
+            const next = lower.indexOf(nextLabel.toLowerCase(), contentStart);
+            if (next >= 0) {
+                contentEnd = next;
+            }
+        }
+        const body = text.slice(contentStart, contentEnd).trim();
+        return body.length === 0 ? null : body;
+    }
+
+    function renderTriage(box, article) {
+        const title = document.createElement('h3');
+        title.textContent = 'When you were stuck';
+        box.append(title);
+        const labels = ['Core concept:', 'Diagnostic question:', 'Starting step:'];
+        const text = article.verifiedSolution || '';
+        const sections = [];
+        let complete = true;
+        for (let i = 0; i < labels.length; i++) {
+            const body = sectionBody(text, labels[i], labels[i + 1]);
+            if (body == null) {
+                complete = false;
+                break;
+            }
+            sections.push({ label: labels[i].slice(0, -1), body: body });
+        }
+        if (!complete) {
+            const raw = document.createElement('p');
+            raw.textContent = text;
+            box.append(raw);
+        } else {
+            sections.forEach(function (section) {
+                const line = document.createElement('div');
+                line.className = 'rt-note-line';
+                const kicker = document.createElement('p');
+                kicker.className = 'rt-kicker';
+                kicker.textContent = section.label;
+                const note = document.createElement('p');
+                note.className = 'rt-note';
+                note.textContent = section.body;
+                line.append(kicker, note);
+                box.append(line);
+            });
+        }
+
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = '/student/requests/duck/enough';
+        form.className = 'mt-3';
+        form.acceptCharset = 'UTF-8';
+
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = '_csrf';
+        csrf.value = deflectionResults.dataset.csrf || '';
+
+        const articleId = document.createElement('input');
+        articleId.type = 'hidden';
+        articleId.name = 'articleId';
+        articleId.value = article.id;
+
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = 'enoughTakeaway';
+        label.textContent = 'What changed';
+
+        const area = document.createElement('textarea');
+        area.className = 'form-control mb-2';
+        area.name = 'takeaway';
+        area.id = 'enoughTakeaway';
+        area.rows = 2;
+        area.maxLength = 500;
+        area.required = true;
+        area.placeholder = 'What do you understand now?';
+
+        const button = document.createElement('button');
+        button.type = 'submit';
+        button.className = 'btn btn-rt-primary w-100';
+        button.textContent = 'This was enough';
+
+        form.append(csrf, articleId, label, area, button);
+        box.append(form);
     }
 
     function renderSuggestion(article) {
         clearSuggestion();
         const box = document.createElement('div');
         box.className = 'rt-suggestion rt-suggestion-quiet';
-
-        const title = document.createElement('h3');
-        title.textContent = 'Course note';
-
-        const solution = document.createElement('p');
-        solution.textContent = article.verifiedSolution || '';
-
         if (article.kind === 'triage') {
-            box.append(title, solution);
+            renderTriage(box, article);
         } else {
+            const title = document.createElement('h3');
+            title.textContent = 'Course note';
             const question = document.createElement('p');
             question.textContent = 'Past question: ' + (article.problemDescription || '');
+            const solution = document.createElement('p');
+            solution.textContent = article.verifiedSolution || '';
             box.append(title, question, solution);
         }
         deflectionResults.append(box);
@@ -174,12 +279,16 @@
     }
 
     if (topicInput && courseInput) {
+        showTopicExample();
         let searchTimer;
         topicInput.addEventListener('keyup', function () {
             clearTimeout(searchTimer);
             searchTimer = setTimeout(searchKnowledge, 300);
         });
-        courseInput.addEventListener('change', searchKnowledge);
+        courseInput.addEventListener('change', function () {
+            showTopicExample();
+            searchKnowledge();
+        });
     }
 </script>
 </body>

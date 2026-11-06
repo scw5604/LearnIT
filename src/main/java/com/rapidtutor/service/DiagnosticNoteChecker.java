@@ -17,7 +17,6 @@ public final class DiagnosticNoteChecker {
     private DiagnosticNoteChecker() {
     }
 
-    /** Accepts a note only when each triage section is present and has text. */
     public static boolean accepts(String note) {
         return !sections(note).isEmpty();
     }

@@ -13,7 +13,14 @@ import java.util.Optional;
 public interface KnowledgeArticleRepository extends JpaRepository<KnowledgeArticle, Long> {
     List<KnowledgeArticle> findByCourseIgnoreCaseAndTopicContainingIgnoreCase(String course, String topic);
 
-    Optional<KnowledgeArticle> findFirstByCourseIgnoreCaseAndTopicContainingIgnoreCase(String course, String topic);
+    Optional<KnowledgeArticle> findFirstByCourseIgnoreCaseAndKindIgnoreCaseAndTopicContainingIgnoreCaseOrderByCreatedAtDesc(
+            String course, String kind, String topic);
+
+    Optional<KnowledgeArticle> findFirstByCourseIgnoreCaseAndTopicContainingIgnoreCaseAndKindIsNullOrderByCreatedAtDesc(
+            String course, String topic);
+
+    Optional<KnowledgeArticle> findFirstByCourseIgnoreCaseAndTopicIgnoreCaseAndKindIgnoreCaseOrderByCreatedAtDesc(
+            String course, String topic, String kind);
 
     List<KnowledgeArticle> findByCourseIgnoreCaseAndTopicContainingIgnoreCaseOrderByTopicAsc(String course, String topic);
 

@@ -3,6 +3,7 @@ package com.rapidtutor.controller;
 import com.rapidtutor.model.Courses;
 import com.rapidtutor.model.KnowledgeArticle;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
+import com.rapidtutor.service.KnowledgeBankService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,8 +25,16 @@ public class KnowledgeAPIController {
         if (canonicalCourse == null || topic == null || topic.isBlank()) {
             return List.of();
         }
-        Optional<KnowledgeArticle> article = knowledgeRepository
-                .findFirstByCourseIgnoreCaseAndTopicContainingIgnoreCase(canonicalCourse, topic.trim());
-        return article.map(List::of).orElseGet(List::of);
+        String query = topic.trim();
+        Optional<KnowledgeArticle> triage = knowledgeRepository
+                .findFirstByCourseIgnoreCaseAndKindIgnoreCaseAndTopicContainingIgnoreCaseOrderByCreatedAtDesc(
+                        canonicalCourse, KnowledgeBankService.TRIAGE, query);
+        if (triage.isPresent()) {
+            return List.of(triage.get());
+        }
+        Optional<KnowledgeArticle> seeded = knowledgeRepository
+                .findFirstByCourseIgnoreCaseAndTopicContainingIgnoreCaseAndKindIsNullOrderByCreatedAtDesc(
+                        canonicalCourse, query);
+        return seeded.map(List::of).orElseGet(List::of);
     }
 }

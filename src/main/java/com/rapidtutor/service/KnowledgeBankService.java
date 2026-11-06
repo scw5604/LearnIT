@@ -4,6 +4,8 @@ import com.rapidtutor.model.KnowledgeArticle;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 public class KnowledgeBankService {
 
@@ -20,7 +22,16 @@ public class KnowledgeBankService {
     /** Stores the course, topic, and diagnostic note. The student's own writing is not copied here. */
     public KnowledgeArticle saveTriage(String course, String topic, String note) {
         String safeTopic = clip(topic, 240);
-        KnowledgeArticle article = new KnowledgeArticle(course, safeTopic, safeTopic, clip(note, TEXT_LIMIT));
+        String safeNote = clip(note, TEXT_LIMIT);
+        Optional<KnowledgeArticle> existing = knowledgeArticleRepository
+                .findFirstByCourseIgnoreCaseAndTopicIgnoreCaseAndKindIgnoreCaseOrderByCreatedAtDesc(
+                        course, safeTopic, TRIAGE);
+        if (existing.isPresent()) {
+            KnowledgeArticle article = existing.get();
+            article.setVerifiedSolution(safeNote);
+            return knowledgeArticleRepository.save(article);
+        }
+        KnowledgeArticle article = new KnowledgeArticle(course, safeTopic, safeTopic, safeNote);
         article.setKind(TRIAGE);
         return knowledgeArticleRepository.save(article);
     }

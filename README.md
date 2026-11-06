@@ -1,6 +1,6 @@
 # LearnIT
 
-LearnIT is a proof-of-concept for the IST 440W capstone. A student tries to clear a course blocker before a person is involved. They name the blocker with a course, topic, and description. Soquacktic, the rubber duck, writes one diagnostic note and can reply once to what the student types. When the student figures it out, they write what changed, and the blocker is kept on their **My blockers** page. The shared databank keeps course notes and those diagnostic notes. If the student is still stuck, they choose a meeting method, response time, session length, and bounty, and post for a peer tutor on this platform. Nothing in that flow stops them from getting help from a tutor somewhere else.
+LearnIT is a proof-of-concept for the IST 440W capstone. A student tries to clear a course problem before a person is involved. They name what they are stuck on with a course, topic, and description. Soquacktic, the rubber duck, writes one diagnostic note and can reply once to what the student types. When the student figures it out, they write what changed, and the attempt is kept on their **What I'm stuck on** page. The shared databank keeps course notes and those diagnostic notes. If the student is still stuck, they choose a meeting method, response time, session length, and bounty, and post for a peer tutor on this platform. Nothing in that flow stops them from getting help from a tutor somewhere else.
 
 Administrators approve tutors and keep accounts working. That management is how the platform runs. It is not the innovation.
 
@@ -28,7 +28,7 @@ Leave port 8080 free. A second start while the first process is using `data/` ex
 
 Run the tests from that same folder: `mvnw.cmd test` on Windows, or `./mvnw test` on macOS or Linux.
 
-A diagnostic note is required before a request exists. **Name a blocker** on the student home opens Talk it through, which stores that note. The app uses the offline note when `groq.api.key` is blank, `mock-key`, or unset, and when a live reply cannot be shown. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and set `groq.api.key` in `application-local.properties`. You can instead set `GROQ_API_KEY` in the environment, as long as that local file does not set `groq.api.key` itself. The key is not stored in git.
+A diagnostic note is required before a request exists. **I'm stuck** on the student home opens Talk it through, which stores that note. The topic field shows an example from that course's databank note. Typing the example shows the note before a new one is written. The app uses the offline note when `groq.api.key` is blank, `mock-key`, or unset, and when a live reply cannot be shown. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and set `groq.api.key` in `application-local.properties`. You can instead set `GROQ_API_KEY` in the environment, as long as that local file does not set `groq.api.key` itself. The key is not stored in git.
 
 ## Accessing the application
 
@@ -47,5 +47,5 @@ Optional accounts for your own machine are read from `application-local.properti
 
 - H2 writes to `./data/rapidtutor`. That folder is gitignored so each machine gets its own database.
 - The knowledge bank is seeded independently of users. Missing course notes are still inserted when the users table already has rows.
-- To reset everything (users, tokens, blockers, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again. Local demo accounts are created again only when `application-local.properties` enables them.
+- To reset everything (users, tokens, stuck attempts, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again. Local demo accounts are created again only when `application-local.properties` enables them.
 - On startup, an older database gets wider columns for request descriptions (2000 characters) and review feedback (1000 characters), and a `VERSION` column on `USERS` when that column is missing. You do not need to delete `data/` for those updates.
