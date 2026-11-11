@@ -9,43 +9,102 @@ Administrators approve tutors and keep accounts working. That management is how 
 - **Backend:** Java 21, Spring Boot 4.1.1 (Spring Web, Spring Security, Spring Data JPA)
 - **Database:** Embedded H2 (file-based)
 - **Frontend:** Thymeleaf, Bootstrap 5 served from `src/main/resources/static/vendor`, and `css/app.css`
+- **Diagnostic note:** Groq chat completions API (model `openai/gpt-oss-20b`), with an offline fallback
 
 ## Prerequisites
 
-- **JDK 21** installed and on your `PATH`
-- A global Maven install is **not** required; this repo includes the Maven Wrapper (`mvnw` / `mvnw.cmd`)
+- **JDK 21 or newer**, with `java` on your `PATH` (check with `java -version`)
+- **Internet access.** On first run, the Maven Wrapper downloads Maven 3.9.16 and all dependencies, which takes a few minutes. The live diagnostic note also calls `api.groq.com`.
+- **A Groq API key.** Create a free key at [console.groq.com](https://console.groq.com).
+- A global Maven install is **not** required; this repo includes the Maven Wrapper (`mvnw` / `mvnw.cmd`).
+- Port **8080** must be free.
 
-## Running locally
+## Setup (required)
 
-1. Clone or extract the repository.
-2. In a terminal, go to the project root (the folder that contains `pom.xml`).
-3. Start the app:
-   - **Windows:** `mvnw.cmd spring-boot:run`
-   - **macOS / Linux:** `./mvnw spring-boot:run`
-4. On a **fresh** database, the console prints `Knowledge bank loaded successfully` when course notes are inserted. It prints `Local demo accounts loaded successfully.` only when `application-local.properties` enables those accounts and the users table is empty. If `data/` already has those rows, those lines do not appear.
+1. Clone the repository and open a terminal in the folder that contains `pom.xml`:
+   ```
+   git clone https://github.com/scw5604/rapidtutor
+   cd rapidtutor
+   ```
+2. Create the local config file. Without it there is no admin account, so tutors cannot be approved, and the diagnostic note uses the offline text.
+   - **Windows (PowerShell):** `Copy-Item application-local.properties.example application-local.properties`
+   - **Windows (Command Prompt):** `copy application-local.properties.example application-local.properties`
+   - **macOS / Linux:** `cp application-local.properties.example application-local.properties`
+3. Edit `application-local.properties` and set:
+   ```
+   groq.api.key=<your Groq API key>
+   rapidtutor.demo-users.enabled=true
+   rapidtutor.demo-users.student.username=demoStudent
+   rapidtutor.demo-users.student.password=<choose one, 10+ characters>
+   rapidtutor.demo-users.tutor.username=demoTutor
+   rapidtutor.demo-users.tutor.password=<choose one, 10+ characters>
+   rapidtutor.demo-users.admin.username=demoAdmin
+   rapidtutor.demo-users.admin.password=<choose one, 10+ characters>
+   ```
+   Each password must be at least 10 characters, must not be `password`, and must not match its username. This file is gitignored, so the key and passwords stay on your machine. You can instead set the key in a `GROQ_API_KEY` environment variable, as long as this file does not set `groq.api.key` itself.
+4. **macOS / Linux only:** `chmod +x mvnw`
 
-Leave port 8080 free. A second start while the first process is using `data/` exits with `LearnIT is already running. Stop the other copy before starting this one.` On macOS or Linux, `./mvnw` has to be executable.
+## Running
 
-Run the tests from that same folder: `mvnw.cmd test` on Windows, or `./mvnw test` on macOS or Linux.
+Start the app from the project folder. Run it from a terminal in that folder, because `application-local.properties` is read relative to the folder the app starts in.
+- **Windows (PowerShell):** `.\mvnw.cmd spring-boot:run`
+- **Windows (Command Prompt):** `mvnw.cmd spring-boot:run`
+- **macOS / Linux:** `./mvnw spring-boot:run`
 
-A diagnostic note is required before a request exists. **I'm stuck** on the student home opens Talk it through, which stores that note. The topic field shows an example from that course's databank note. Typing the example shows the note before a new one is written. The app uses the offline note when `groq.api.key` is blank, `mock-key`, or unset, and when a live reply cannot be shown. To use a live note, create a free key at [console.groq.com](https://console.groq.com) and set `groq.api.key` in `application-local.properties`. You can instead set `GROQ_API_KEY` in the environment, as long as that local file does not set `groq.api.key` itself. The key is not stored in git.
+On a first run with an empty database, the console ends with:
+```
+Started RapidtutorApplication in ... seconds
+Local demo accounts loaded successfully.
+Knowledge bank loaded successfully (50 articles).
+```
+If `Local demo accounts loaded successfully.` does not appear, check step 3, then stop the app, delete the `data/` folder, and start it again. On later runs with the same `data/` folder, those two lines do not appear because the rows already exist.
+
+A second start while the first process is using `data/` exits with `LearnIT is already running. Stop the other copy before starting this one.`
+
+Open http://localhost:8080/login and sign in:
+- `demoStudent` opens **What I'm stuck on** (`/student/dashboard`)
+- `demoTutor` opens the **tutor board** (`/tutor/board`)
+- `demoAdmin` opens the **admin overview** (`/admin`)
+
+The local student and tutor start with 100 tokens, and that tutor is given every offered course. The local admin starts with 0 tokens.
+
+## Running the tests
+
+- **Windows (PowerShell):** `.\mvnw.cmd test`
+- **Windows (Command Prompt):** `mvnw.cmd test`
+- **macOS / Linux:** `./mvnw test`
+
+Expected result: `Tests run: 159, Failures: 0, Errors: 0, Skipped: 0` and `BUILD SUCCESS`. The tests use an in-memory database and a mock key, so they do not need the config file or a Groq key.
+
+## The diagnostic note
+
+A diagnostic note is required before a request exists. **I'm stuck** on the student home opens Talk it through, which stores that note. The topic field shows an example from that course's databank note. Typing the example shows the note before a new one is written.
+
+The recorded demo used a live Groq key. The note is written by the model, so its wording changes on every run and will not match the recording word for word. It always has three labeled lines: **Core concept**, **Diagnostic question**, and **Starting step**.
+
+If the key is missing, invalid, or the call fails, the app shows the offline note instead. The offline note looks like this, for a topic such as "Observer pattern":
+```
+Core concept: Observer pattern is the idea to clarify before the session.
+Diagnostic question: What have you already tried with Observer pattern?
+Starting step: Write the part of Observer pattern you can explain in one sentence.
+```
+If you see that wording, the live key is not being used. Check the console for a line starting with `AI diagnosis failed:`, such as a `401 Unauthorized` for a wrong key.
 
 ## Accessing the application
 
 - **Login:** http://localhost:8080/login
 - **Register (new student accounts):** http://localhost:8080/register
-- **H2 console:** http://localhost:8080/h2-console  
+- **Tutor application:** http://localhost:8080/apply/tutor
+- **H2 console (admin only):** sign in as `demoAdmin` first, then open http://localhost:8080/h2-console  
   JDBC URL: `jdbc:h2:file:./data/rapidtutor`  
   Username: `sa`  
   Password: (leave blank)
 
 Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. That approval is platform management. An approved applicant signs out and signs in again to open the tutor board. A session is claimed when the student accepts that time.
 
-Optional accounts for your own machine are read from `application-local.properties` when `rapidtutor.demo-users.enabled` is true. Copy `application-local.properties.example` and set a distinct username and a password of at least 10 characters for the student, tutor, and admin. Do not use the password `password`. That file is gitignored. Those accounts are inserted only when every value is set and the users table is empty. The local student and tutor start with 100 tokens, and that tutor is given every offered course. The local admin starts with 0 tokens. A fresh clone without that file has no pre-created logins.
-
 ## Architecture and database notes
 
 - H2 writes to `./data/rapidtutor`. That folder is gitignored so each machine gets its own database.
 - The knowledge bank is seeded independently of users. Missing course notes are still inserted when the users table already has rows.
-- To reset everything (users, tokens, stuck attempts, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again. Local demo accounts are created again only when `application-local.properties` enables them.
+- To reset everything (users, tokens, stuck attempts, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again. The local accounts are created again from `application-local.properties`.
 - On startup, an older database gets wider columns for request descriptions (2000 characters) and review feedback (1000 characters), and a `VERSION` column on `USERS` when that column is missing. You do not need to delete `data/` for those updates.
