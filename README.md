@@ -13,7 +13,7 @@ Administrators approve tutors and keep accounts working. That management is how 
 
 ## Prerequisites
 
-- **JDK 21 or newer**, with `java` on your `PATH` (check with `java -version`)
+- **JDK 21 or newer**, with `java` on your `PATH` (check with `java -version`). The recorded demo ran on JDK 25.0.1.
 - **Internet access.** On first run, the Maven Wrapper downloads Maven 3.9.16 and all dependencies, which takes a few minutes. The live diagnostic note also calls `api.groq.com`.
 - **A Groq API key.** Create a free key at [console.groq.com](https://console.groq.com).
 - A global Maven install is **not** required; this repo includes the Maven Wrapper (`mvnw` / `mvnw.cmd`).
@@ -57,7 +57,9 @@ Started RapidtutorApplication in ... seconds
 Local demo accounts loaded successfully.
 Knowledge bank loaded successfully (50 articles).
 ```
-If `Local demo accounts loaded successfully.` does not appear, check step 3, then stop the app, delete the `data/` folder, and start it again. On later runs with the same `data/` folder, those two lines do not appear because the rows already exist.
+If `Local demo accounts loaded successfully.` does not appear, check step 3, then stop the app, delete the `data/` folder, and start it again. If a username or password in step 3 is missing or too weak, the console prints `Demo user seeding skipped. Set a distinct username and a password of at least 10 characters for each local account.` instead. On later runs with the same `data/` folder, those two lines do not appear because the rows already exist.
+
+To stop the app, press **Ctrl+C** in the terminal where it is running. On Windows, answer `Y` if asked `Terminate batch job (Y/N)?`.
 
 A second start while the first process is using `data/` exits with `LearnIT is already running. Stop the other copy before starting this one.`
 
@@ -88,7 +90,9 @@ Core concept: Observer pattern is the idea to clarify before the session.
 Diagnostic question: What have you already tried with Observer pattern?
 Starting step: Write the part of Observer pattern you can explain in one sentence.
 ```
-If you see that wording, the live key is not being used. Check the console for a line starting with `AI diagnosis failed:`, such as a `401 Unauthorized` for a wrong key.
+The app also uses the offline note when a live reply fails its own check, for example when the reply is missing a section or contains code or a final answer. If you see that wording once, choose **Start over** on that page and try again. If you see it every time, the live key is not being used. Check the console for a line starting with `AI diagnosis failed:`, such as a `401 Unauthorized` for a wrong key.
+
+The app uses the Groq model `openai/gpt-oss-20b`. If Groq retires that model, every call fails and the offline note appears. To use another Groq model, add `groq.model=<model id>` to `application-local.properties`, or set the `GROQ_MODEL` environment variable. Current model ids are listed at [console.groq.com/docs/models](https://console.groq.com/docs/models).
 
 ## Accessing the application
 
