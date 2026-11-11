@@ -23,8 +23,8 @@ Administrators approve tutors and keep accounts working. That management is how 
 
 1. Clone the repository and open a terminal in the folder that contains `pom.xml`:
    ```
-   git clone https://github.com/scw5604/rapidtutor
-   cd rapidtutor
+   git clone https://github.com/scw5604/LearnIT.git
+   cd LearnIT
    ```
 2. Create the local config file. Without it there is no admin account, so tutors cannot be approved, and the diagnostic note uses the offline text.
    - **Windows (PowerShell):** `Copy-Item application-local.properties.example application-local.properties`
