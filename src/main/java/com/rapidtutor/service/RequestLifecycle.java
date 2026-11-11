@@ -5,15 +5,18 @@ import com.rapidtutor.repository.RequestEventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
 public class RequestLifecycle {
 
     private final RequestEventRepository eventRepository;
+    private final Clock clock;
 
-    public RequestLifecycle(RequestEventRepository eventRepository) {
+    public RequestLifecycle(RequestEventRepository eventRepository, Clock clock) {
         this.eventRepository = eventRepository;
+        this.clock = clock;
     }
 
     @Transactional
@@ -23,7 +26,7 @@ public class RequestLifecycle {
         event.setFromStatus(fromStatus);
         event.setToStatus(toStatus);
         event.setActorUsername(actorUsername);
-        event.setAt(LocalDateTime.now());
+        event.setAt(LocalDateTime.now(clock));
         eventRepository.save(event);
     }
 }

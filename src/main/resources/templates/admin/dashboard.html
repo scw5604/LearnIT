@@ -76,7 +76,7 @@
                         <tr th:each="user : ${users}">
                             <td th:text="${user.publicName}">Student</td>
                             <td th:text="${user.username}">student1</td>
-                            <td th:text="${user.role}">STUDENT</td>
+                            <td th:text="${#strings.capitalize(#strings.toLowerCase(user.role))}">Student</td>
                             <td th:text="${user.subjects != null ? user.subjects : '—'}">—</td>
                             <td th:text="${user.tokenBalance != null ? user.tokenBalance : 0}">0</td>
                         </tr>

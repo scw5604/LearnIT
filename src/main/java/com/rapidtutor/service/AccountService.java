@@ -16,7 +16,6 @@ public class AccountService {
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Pattern USERNAME = Pattern.compile("^[A-Za-z0-9._-]{3,40}$");
-    private static final int STARTER_TOKENS = 100;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -37,7 +36,7 @@ public class AccountService {
                                           String password, String confirmPassword) {
         User user = newAccount(displayName, email, username, password, confirmPassword);
         user.setRole("STUDENT");
-        user.setTokenBalance(STARTER_TOKENS);
+        user.setTokenBalance(User.STARTER_TOKENS);
         String code = attachRecoveryCode(user);
         return new CreatedAccount(userRepository.saveAndFlush(user), code);
     }
@@ -116,7 +115,7 @@ public class AccountService {
     }
 
     private User newAccount(String displayName, String email, String username, String password, String confirmPassword) {
-        String cleanName = required(displayName, "Enter your name.", 80);
+        String cleanName = FormText.required(displayName, "Enter your name.", 80);
         String cleanEmail = normalizeEmail(email);
         if (!EMAIL.matcher(cleanEmail).matches() || cleanEmail.length() > 120) {
             throw new IllegalArgumentException("Enter a valid email address.");
@@ -184,18 +183,16 @@ public class AccountService {
         return String.join(", ", canonical);
     }
 
-    private String normalizeEmail(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
+    /** The message for a sign-up that lost a race on the unique username or email column. */
+    public String duplicateAccountMessage(String username) {
+        String clean = username == null ? "" : username.trim();
+        if (userRepository.findByUsernameIgnoreCase(clean) != null) {
+            return "That username is already taken.";
+        }
+        return "That email is already registered.";
     }
 
-    private String required(String value, String message, int max) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(message);
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() > max) {
-            throw new IllegalArgumentException("Keep that entry under " + max + " characters.");
-        }
-        return trimmed;
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
     }
 }

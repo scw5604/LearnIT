@@ -71,7 +71,7 @@
                         <div class="rt-detail-actions" th:if="${request.status == 'CLAIMED' or request.status == 'RESOLVED' or request.status == 'OPEN'}">
                             <form th:if="${request.status == 'OPEN' and request.aiDiagnosticNote != null and !#strings.isEmpty(request.aiDiagnosticNote)}"
                                   th:action="@{/student/requests/{id}/triage(id=${request.id})}" method="post" class="m-0">
-                                <button type="submit" class="btn btn-rt-primary">This answered my question</button>
+                                <button type="submit" class="btn btn-rt-primary">I figured it out</button>
                             </form>
                             <form th:if="${request.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/resolve(id=${request.id})}" method="post" class="m-0">
                                 <button type="submit" class="btn btn-rt-ok">Mark resolved and pay the tutor</button>
@@ -79,7 +79,7 @@
                             <a th:if="${request.status == 'RESOLVED' and request.assignedTutorId != null and !alreadyReviewed}" class="btn btn-rt-primary" th:href="@{/student/requests/{id}/review(id=${request.id})}">Leave a review</a>
                             <p class="text-muted mb-0" th:if="${request.status == 'RESOLVED' and request.assignedTutorId != null and alreadyReviewed}">You reviewed this session.</p>
                             <form th:if="${request.status == 'OPEN' or request.status == 'CLAIMED'}" th:action="@{/student/requests/{id}/cancel(id=${request.id})}" method="post" class="m-0">
-                                <button type="submit" class="btn btn-rt-danger">Cancel request</button>
+                                <button type="submit" class="btn btn-rt-danger" th:text="${request.status == 'CLAIMED' ? 'Cancel session' : 'Cancel request'}">Cancel request</button>
                             </form>
                         </div>
 

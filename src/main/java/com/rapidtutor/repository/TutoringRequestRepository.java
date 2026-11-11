@@ -17,8 +17,6 @@ public interface TutoringRequestRepository extends JpaRepository<TutoringRequest
 
     List<TutoringRequest> findByStatusAndDesiredResponseTimeIn(String status, Collection<String> desiredResponseTimes);
 
-    List<TutoringRequest> findByStudentIdOrderByCreationTimestampDesc(Long studentId);
-
     @Query("SELECT r.status, COUNT(r) FROM TutoringRequest r GROUP BY r.status")
     List<Object[]> countGroupedByStatus();
 

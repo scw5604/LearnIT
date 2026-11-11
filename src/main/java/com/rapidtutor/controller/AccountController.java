@@ -11,6 +11,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
 
@@ -34,8 +35,17 @@ public class AccountController {
     }
 
     @PostMapping("/register")
-    public String register(@ModelAttribute AccountForm accountForm, Model model) {
-        return createAccount(accountForm, model, false);
+    public String register(@ModelAttribute AccountForm accountForm, Model model, RedirectAttributes redirectAttributes) {
+        return createAccount(accountForm, model, redirectAttributes, false);
+    }
+
+    /** Shows a new account's recovery code once. A refresh or a direct visit goes to sign-in instead. */
+    @GetMapping("/recovery-code")
+    public String showRecoveryCode(Model model) {
+        if (!model.containsAttribute("recoveryCode")) {
+            return "redirect:/login";
+        }
+        return "recovery-code";
     }
 
     @GetMapping("/apply/tutor")
@@ -48,8 +58,8 @@ public class AccountController {
     }
 
     @PostMapping("/apply/tutor")
-    public String apply(@ModelAttribute AccountForm accountForm, Model model) {
-        return createAccount(accountForm, model, true);
+    public String apply(@ModelAttribute AccountForm accountForm, Model model, RedirectAttributes redirectAttributes) {
+        return createAccount(accountForm, model, redirectAttributes, true);
     }
 
     @GetMapping("/apply/status")
@@ -117,7 +127,8 @@ public class AccountController {
         }
     }
 
-    private String createAccount(AccountForm accountForm, Model model, boolean tutor) {
+    private String createAccount(AccountForm accountForm, Model model, RedirectAttributes redirectAttributes,
+                                 boolean tutor) {
         try {
             AccountService.CreatedAccount created = tutor
                     ? accountService.applyAsTutor(accountForm.getDisplayName(), accountForm.getEmail(),
@@ -125,11 +136,12 @@ public class AccountController {
                     accountForm.getCourses())
                     : accountService.registerStudent(accountForm.getDisplayName(), accountForm.getEmail(),
                     accountForm.getUsername(), accountForm.getPassword(), accountForm.getConfirmPassword());
-            model.addAttribute("recoveryCode", created.recoveryCode());
-            model.addAttribute("username", created.user().getUsername());
-            return "recovery-code";
+            redirectAttributes.addFlashAttribute("recoveryCode", created.recoveryCode());
+            redirectAttributes.addFlashAttribute("username", created.user().getUsername());
+            return "redirect:/recovery-code";
         } catch (DataIntegrityViolationException e) {
-            return rejectedAccount(accountForm, model, tutor, duplicateAccountMessage(accountForm));
+            return rejectedAccount(accountForm, model, tutor,
+                    accountService.duplicateAccountMessage(accountForm.getUsername()));
         } catch (IllegalArgumentException e) {
             return rejectedAccount(accountForm, model, tutor, e.getMessage());
         }
@@ -145,14 +157,6 @@ public class AccountController {
             return "apply-tutor";
         }
         return "register";
-    }
-
-    private String duplicateAccountMessage(AccountForm accountForm) {
-        String username = accountForm.getUsername() == null ? "" : accountForm.getUsername().trim();
-        if (userRepository.findByUsernameIgnoreCase(username) != null) {
-            return "That username is already taken.";
-        }
-        return "That email is already registered.";
     }
 
     private User current(Principal principal) {

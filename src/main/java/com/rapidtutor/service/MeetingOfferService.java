@@ -1,6 +1,7 @@
 package com.rapidtutor.service;
 
 import com.rapidtutor.model.MeetingOffer;
+import com.rapidtutor.model.RequestStatus;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
 import com.rapidtutor.repository.MeetingOfferRepository;
@@ -39,7 +40,7 @@ public class MeetingOfferService {
         if (!SubjectMatcher.covers(tutor.getSubjects(), request.getCourse())) {
             throw new IllegalArgumentException("This request is outside your subjects.");
         }
-        if (!"OPEN".equals(request.getStatus())) {
+        if (!RequestStatus.OPEN.equals(request.getStatus())) {
             throw new IllegalStateException("This request is no longer available.");
         }
         requireBeforeDeadline(request);
@@ -65,7 +66,7 @@ public class MeetingOfferService {
         }
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("That request does not exist."));
-        if (!"OPEN".equals(request.getStatus())) {
+        if (!RequestStatus.OPEN.equals(request.getStatus())) {
             throw new IllegalStateException("This request is no longer open.");
         }
         String when = offer.getOfferedTime() == null ? "a time" : offer.getOfferedTime().format(WHEN);
@@ -88,18 +89,18 @@ public class MeetingOfferService {
         if (!student.getId().equals(request.getStudentId())) {
             throw new IllegalArgumentException("You can only manage your own requests.");
         }
-        if (!"OPEN".equals(request.getStatus())) {
+        if (!RequestStatus.OPEN.equals(request.getStatus())) {
             throw new IllegalStateException("This request was already claimed.");
         }
         requireBeforeDeadline(request);
 
-        request.setStatus("CLAIMED");
+        request.setStatus(RequestStatus.CLAIMED);
         request.setAssignedTutorId(offer.getTutorId());
         request.setClaimedTimestamp(LocalDateTime.now(clock));
         request.setOfferedMeetingTime(offer.getOfferedTime());
         requestRepository.save(request);
         offerRepository.deleteByRequestId(requestId);
-        lifecycle.record(requestId, "OPEN", "CLAIMED", student.getUsername());
+        lifecycle.record(requestId, RequestStatus.OPEN, RequestStatus.CLAIMED, student.getUsername());
         notificationService.notify(offer.getTutorId(),
                 student.getPublicName() + " accepted your time.",
                 "/tutor/requests/" + requestId);
@@ -114,7 +115,7 @@ public class MeetingOfferService {
 
     private void requireFuture(LocalDateTime offeredTime) {
         if (offeredTime == null || !offeredTime.isAfter(LocalDateTime.now(clock))) {
-            throw new IllegalArgumentException("Choose a meeting time in the future.");
+            throw new InvalidMeetingTimeException("Choose a meeting time in the future.");
         }
     }
 }

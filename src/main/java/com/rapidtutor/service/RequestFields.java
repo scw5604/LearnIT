@@ -8,6 +8,10 @@ import java.util.Set;
 
 public final class RequestFields {
 
+    public static final int MAX_BOUNTY = 50;
+    public static final int MAX_TOPIC = 120;
+    public static final int MAX_DESCRIPTION = 2000;
+
     public static final List<String> MEETING_METHODS = List.of("Zoom", "Teams", "Phone Call", "In-Person");
     public static final List<String> RESPONSE_TIMES = List.of("ASAP", "Within 2 hours", "Today", "Not urgent");
     public static final List<String> EFFORTS = List.of(
@@ -30,8 +34,8 @@ public final class RequestFields {
         }
         TutoringRequest request = new TutoringRequest();
         request.setCourse(canonical);
-        request.setTopic(required(topic, "Enter a topic.", 120));
-        request.setShortDescription(required(description, "Describe the concept you are stuck on.", 2000));
+        request.setTopic(FormText.required(topic, "Enter a topic.", MAX_TOPIC));
+        request.setShortDescription(FormText.required(description, "Describe the concept you are stuck on.", MAX_DESCRIPTION));
         return request;
     }
 
@@ -48,23 +52,12 @@ public final class RequestFields {
             throw new IllegalArgumentException("Choose a session length.");
         }
         int bountyAmount = bounty == null ? 0 : bounty;
-        if (bountyAmount < 0 || bountyAmount > 50) {
-            throw new IllegalArgumentException("Bounty must be between 0 and 50 tokens.");
+        if (bountyAmount < 0 || bountyAmount > MAX_BOUNTY) {
+            throw new IllegalArgumentException("Bounty must be between 0 and " + MAX_BOUNTY + " tokens.");
         }
         request.setPreferredMeetingMethod(meetingMethod);
         request.setDesiredResponseTime(responseTime);
         request.setExpectedEffort(effort);
         request.setBountyValue(bountyAmount);
-    }
-
-    private static String required(String value, String message, int max) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(message);
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() > max) {
-            throw new IllegalArgumentException("Keep that entry under " + max + " characters.");
-        }
-        return trimmed;
     }
 }

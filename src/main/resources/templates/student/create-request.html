@@ -75,7 +75,8 @@
                                     <p class="form-text mt-2" id="responseHint">ASAP closes after one hour, Within 2 hours after two hours, Today at the start of the next day, and Not urgent stays open.</p>
                                     <div class="mb-4 mt-3">
                                         <label class="form-label" for="bounty">Priority bounty (tokens)</label>
-                                        <input id="bounty" name="bountyValue" type="number" class="form-control" min="0" max="50"
+                                        <input id="bounty" name="bountyValue" type="number" class="form-control" min="0"
+                                               th:max="${T(com.rapidtutor.service.RequestFields).MAX_BOUNTY}"
                                                th:value="${bountyValue != null ? bountyValue : 0}">
                                     </div>
                                     <button type="submit" class="btn btn-rt-ghost w-100 mb-2">Post request</button>
@@ -147,43 +148,14 @@
         deflectionResults.replaceChildren();
     }
 
-    function sectionBody(text, label, nextLabel) {
-        const lower = text.toLowerCase();
-        const start = lower.indexOf(label.toLowerCase());
-        if (start < 0) {
-            return null;
-        }
-        const contentStart = start + label.length;
-        let contentEnd = text.length;
-        if (nextLabel) {
-            const next = lower.indexOf(nextLabel.toLowerCase(), contentStart);
-            if (next >= 0) {
-                contentEnd = next;
-            }
-        }
-        const body = text.slice(contentStart, contentEnd).trim();
-        return body.length === 0 ? null : body;
-    }
-
     function renderTriage(box, article) {
         const title = document.createElement('h3');
         title.textContent = 'When you were stuck';
         box.append(title);
-        const labels = ['Core concept:', 'Diagnostic question:', 'Starting step:'];
-        const text = article.verifiedSolution || '';
-        const sections = [];
-        let complete = true;
-        for (let i = 0; i < labels.length; i++) {
-            const body = sectionBody(text, labels[i], labels[i + 1]);
-            if (body == null) {
-                complete = false;
-                break;
-            }
-            sections.push({ label: labels[i].slice(0, -1), body: body });
-        }
-        if (!complete) {
+        const sections = article.sections || [];
+        if (sections.length === 0) {
             const raw = document.createElement('p');
-            raw.textContent = text;
+            raw.textContent = article.noteText || '';
             box.append(raw);
         } else {
             sections.forEach(function (section) {
@@ -233,7 +205,7 @@
         const button = document.createElement('button');
         button.type = 'submit';
         button.className = 'btn btn-rt-primary w-100';
-        button.textContent = 'This was enough';
+        button.textContent = 'I figured it out';
 
         form.append(csrf, articleId, label, area, button);
         box.append(form);
@@ -251,7 +223,7 @@
             const question = document.createElement('p');
             question.textContent = 'Past question: ' + (article.problemDescription || '');
             const solution = document.createElement('p');
-            solution.textContent = article.verifiedSolution || '';
+            solution.textContent = article.noteText || '';
             box.append(title, question, solution);
         }
         deflectionResults.append(box);

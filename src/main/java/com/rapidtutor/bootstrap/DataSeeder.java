@@ -61,9 +61,9 @@ public class DataSeeder implements CommandLineRunner {
         if (!demoUsersEnabled) {
             return;
         }
-        DemoAccount student = demoAccount(studentUsername, studentPassword, "STUDENT", null, 100);
+        DemoAccount student = demoAccount(studentUsername, studentPassword, "STUDENT", null, User.STARTER_TOKENS);
         DemoAccount tutor = demoAccount(tutorUsername, tutorPassword, "TUTOR",
-                String.join(", ", Courses.OFFERED), 100);
+                String.join(", ", Courses.OFFERED), User.STARTER_TOKENS);
         DemoAccount admin = demoAccount(adminUsername, adminPassword, "ADMIN", null, 0);
         if (student == null || tutor == null || admin == null || !distinct(student, tutor, admin)) {
             System.out.println("Demo user seeding skipped. Set a distinct username and a password of at least 10 characters for each local account.");
@@ -96,7 +96,7 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     static boolean acceptableLocalAccount(String username, String password) {
-        return demoAccount(username, password, "STUDENT", null, 100) != null;
+        return demoAccount(username, password, "STUDENT", null, User.STARTER_TOKENS) != null;
     }
 
     private static boolean distinct(DemoAccount student, DemoAccount tutor, DemoAccount admin) {
@@ -130,7 +130,7 @@ public class DataSeeder implements CommandLineRunner {
         added += seedMissing(hcdd331Articles());
         added += seedMissing(ist230Articles());
         if (added > 0) {
-            System.out.println("Knowledge bank loaded successfully (" + added + " articles).");
+            System.out.println("Databank loaded successfully (" + added + " articles).");
         }
     }
 

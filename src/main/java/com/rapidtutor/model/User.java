@@ -6,6 +6,9 @@ import org.hibernate.annotations.ColumnDefault;
 @Entity
 @Table(name = "users")
 public class User {
+
+    public static final int STARTER_TOKENS = 100;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -30,7 +33,7 @@ public class User {
 
     private String appliedSubjects;
 
-    private Integer tokenBalance = 100;
+    private Integer tokenBalance = STARTER_TOKENS;
 
     @ColumnDefault("false")
     @Column(nullable = false)

@@ -1,6 +1,7 @@
 package com.rapidtutor.service;
 
 import com.rapidtutor.model.MeetingOffer;
+import com.rapidtutor.model.RequestStatus;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.model.User;
 import com.rapidtutor.repository.MeetingOfferRepository;
@@ -31,9 +32,12 @@ public class TriageCloseService {
         this.requestLifecycle = requestLifecycle;
     }
 
-    /** Refunds the bounty, resolves the open request, and stores the note. */
+    /**
+     * Refunds the bounty, resolves the open request, and stores the note.
+     * Returns whether the note was added to the databank.
+     */
     @Transactional
-    public void close(User student, Long requestId) {
+    public boolean close(User student, Long requestId) {
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("That request does not exist."));
         if (!student.getId().equals(request.getStudentId())) {
@@ -47,7 +51,8 @@ public class TriageCloseService {
                     student.getPublicName() + " closed the request from the diagnostic note.",
                     "/tutor/board");
         }
-        knowledgeBankService.saveTriage(request.getCourse(), request.getTopic(), request.getAiDiagnosticNote());
-        requestLifecycle.record(requestId, "OPEN", "RESOLVED", student.getUsername());
+        boolean saved = knowledgeBankService.saveTriage(request.getCourse(), request.getTopic(), request.getAiDiagnosticNote());
+        requestLifecycle.record(requestId, RequestStatus.OPEN, RequestStatus.RESOLVED, student.getUsername());
+        return saved;
     }
 }

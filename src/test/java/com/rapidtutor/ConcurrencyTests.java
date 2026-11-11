@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.TestPropertySource;
 
+import static com.rapidtutor.model.RequestStatus.CLAIMED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -19,22 +20,22 @@ public class ConcurrencyTests {
     private TutoringRequestRepository repository;
 
     @Test
-    public void testOptimisticLockingRejectsSimultaneousClaims() {
+    public void testVersionCheckRejectsStaleSave() {
         TutoringRequest created = new TutoringRequest();
         created.setCourse("HCDD 412");
         created.setTopic("Optimistic lock");
-        created.setShortDescription("Two tutors claim the same request.");
+        created.setShortDescription("Two copies of the same request are loaded, and the older copy is saved second.");
         created = repository.saveAndFlush(created);
 
         TutoringRequest req1 = repository.findById(created.getId()).orElseThrow();
         TutoringRequest req2 = repository.findById(created.getId()).orElseThrow();
 
-        req1.setStatus("CLAIMED");
+        req1.setStatus(CLAIMED);
         repository.saveAndFlush(req1);
 
-        req2.setStatus("CLAIMED");
+        req2.setStatus(CLAIMED);
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> repository.saveAndFlush(req2));
 
-        assertEquals("CLAIMED", repository.findById(created.getId()).orElseThrow().getStatus());
+        assertEquals(CLAIMED, repository.findById(created.getId()).orElseThrow().getStatus());
     }
 }

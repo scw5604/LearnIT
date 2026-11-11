@@ -1,8 +1,8 @@
 # LearnIT
 
-LearnIT is a proof-of-concept for the IST 440W capstone. A student tries to clear a course problem before a person is involved. They name what they are stuck on with a course, topic, and description. Soquacktic, the rubber duck, writes one diagnostic note and can reply once to what the student types. When the student figures it out, they write what changed, and the attempt is kept on their **What I'm stuck on** page. The shared databank keeps course notes and those diagnostic notes. If the student is still stuck, they choose a meeting method, response time, session length, and bounty, and post for a peer tutor on this platform. Nothing in that flow stops them from getting help from a tutor somewhere else.
+LearnIT is a proof-of-concept for the IST 440W capstone. A student tries to clear a course problem before a person is involved. They name what they are stuck on with a course, topic, and description. Soquacktic, the rubber duck, writes one diagnostic note and can reply once to what the student types. When the student figures it out, they write what changed, and the attempt is kept on their **What I'm stuck on** page. The shared databank keeps course notes and the first diagnostic note written for each course and topic. If the student is still stuck, they choose a meeting method, response time, session length, and bounty, and post for a peer tutor on this platform.
 
-Administrators approve tutors and keep accounts working. That management is how the platform runs. It is not the innovation.
+Administrators approve tutor applications and manage accounts.
 
 ## Tech stack
 
@@ -10,6 +10,8 @@ Administrators approve tutors and keep accounts working. That management is how 
 - **Database:** Embedded H2 (file-based)
 - **Frontend:** Thymeleaf, Bootstrap 5 served from `src/main/resources/static/vendor`, and `css/app.css`
 - **Diagnostic note:** Groq chat completions API (model `openai/gpt-oss-20b`), with an offline fallback
+
+LearnIT was developed under the working name RapidTutor, so packages, properties, and the database file use `rapidtutor`.
 
 ## Prerequisites
 
@@ -55,7 +57,7 @@ On a first run with an empty database, the console ends with:
 ```
 Started RapidtutorApplication in ... seconds
 Local demo accounts loaded successfully.
-Knowledge bank loaded successfully (50 articles).
+Databank loaded successfully (50 articles).
 ```
 If `Local demo accounts loaded successfully.` does not appear, check step 3, then stop the app, delete the `data/` folder, and start it again. If a username or password in step 3 is missing or too weak, the console prints `Demo user seeding skipped. Set a distinct username and a password of at least 10 characters for each local account.` instead. On later runs with the same `data/` folder, those two lines do not appear because the rows already exist.
 
@@ -76,7 +78,7 @@ The local student and tutor start with 100 tokens, and that tutor is given every
 - **Windows (Command Prompt):** `mvnw.cmd test`
 - **macOS / Linux:** `./mvnw test`
 
-Expected result: `Tests run: 159, Failures: 0, Errors: 0, Skipped: 0` and `BUILD SUCCESS`. The tests use an in-memory database and a mock key, so they do not need the config file or a Groq key.
+Expected result: `Tests run: 166, Failures: 0, Errors: 0, Skipped: 0` and `BUILD SUCCESS`. The tests use an in-memory database and a mock key, so they do not need the config file or a Groq key.
 
 ## The diagnostic note
 
@@ -90,7 +92,7 @@ Core concept: Observer pattern is the idea to clarify before the session.
 Diagnostic question: What have you already tried with Observer pattern?
 Starting step: Write the part of Observer pattern you can explain in one sentence.
 ```
-The app also uses the offline note when a live reply fails its own check, for example when the reply is missing a section or contains code or a final answer. If you see that wording once, choose **Start over** on that page and try again. If you see it every time, the live key is not being used. Check the console for a line starting with `AI diagnosis failed:`, such as a `401 Unauthorized` for a wrong key.
+The app also uses the offline note when a live reply fails its own check, for example when the reply is missing a section or contains code or a final answer. If you see that wording once, choose **Start over** on that page and try again. If you see it every time, the live key is not being used. The offline note is never saved to the databank, so choosing **I figured it out** with it shows only `Saved.` Check the console for a line starting with `AI diagnosis failed:`, such as a `401 Unauthorized` for a wrong key.
 
 The app uses the Groq model `openai/gpt-oss-20b`. If Groq retires that model, every call fails and the offline note appears. To use another Groq model, add `groq.model=<model id>` to `application-local.properties`, or set the `GROQ_MODEL` environment variable. Current model ids are listed at [console.groq.com/docs/models](https://console.groq.com/docs/models).
 
@@ -104,11 +106,11 @@ The app uses the Groq model `openai/gpt-oss-20b`. If Groq retires that model, ev
   Username: `sa`  
   Password: (leave blank)
 
-Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. That approval is platform management. An approved applicant signs out and signs in again to open the tutor board. A session is claimed when the student accepts that time.
+Public registration creates **student** accounts. Tutors apply at http://localhost:8080/apply/tutor, and an administrator approves them before they can offer a time. An approved applicant signs out and signs in again to open the tutor board. A session is claimed when the student accepts that time.
 
 ## Architecture and database notes
 
 - H2 writes to `./data/rapidtutor`. That folder is gitignored so each machine gets its own database.
-- The knowledge bank is seeded independently of users. Missing course notes are still inserted when the users table already has rows.
-- To reset everything (users, tokens, stuck attempts, requests, knowledge bank): stop the server, delete the `data/` folder, and start the app again. The local accounts are created again from `application-local.properties`.
+- The databank is seeded independently of users. Missing course notes are still inserted when the users table already has rows.
+- To reset everything (users, tokens, stuck attempts, requests, databank): stop the server, delete the `data/` folder, and start the app again. The local accounts are created again from `application-local.properties`.
 - On startup, an older database gets wider columns for request descriptions (2000 characters) and review feedback (1000 characters), and a `VERSION` column on `USERS` when that column is missing. You do not need to delete `data/` for those updates.

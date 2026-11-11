@@ -19,6 +19,7 @@ import com.rapidtutor.model.Notification;
 import com.rapidtutor.model.Review;
 import com.rapidtutor.service.AiDiagnosisService;
 import com.rapidtutor.service.EconomyService;
+import com.rapidtutor.service.KnowledgeBankService;
 import com.rapidtutor.service.MeetingOfferService;
 import com.rapidtutor.service.RequestExpiration;
 import com.rapidtutor.service.SocraticNotes;
@@ -26,6 +27,7 @@ import jakarta.persistence.EntityManager;
 import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,6 +90,12 @@ class PlatformRulesTests {
 
     private static final Set<String> DEMO_USERS = Set.of("student1", "tutor1", "admin");
 
+    private static final String LIVE_NOTE = """
+            Core concept: A loop stops when its condition becomes false.
+            Diagnostic question: Which line changes the value the condition checks?
+            Starting step: Trace two passes of the loop and write the counter after each.
+            """;
+
     @Autowired
     private org.springframework.test.web.servlet.MockMvc mockMvc;
 
@@ -142,6 +150,9 @@ class PlatformRulesTests {
     @Autowired
     private AiDiagnosisService aiDiagnosisService;
 
+    @Autowired
+    private KnowledgeBankService knowledgeBankService;
+
     @BeforeEach
     void resetRows() {
         duckDraftRepository.deleteAll();
@@ -175,8 +186,8 @@ class PlatformRulesTests {
                         .param("role", "ADMIN")
                         .param("tokenBalance", "9999")
                         .param("subjects", "HCDD 412"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"recovery-code\"")));
+                .andExpect(redirectedUrl("/recovery-code"))
+                .andExpect(flash().attributeExists("recoveryCode"));
 
         User created = userRepository.findByUsername("newstudent");
         assertTrue(created.getPassword().startsWith("{bcrypt}"));
@@ -307,9 +318,9 @@ class PlatformRulesTests {
         TutoringRequest request = newRequest(userRepository.findByUsername("student1"), "HCDD 412", "Bounds");
 
         assertThrows(IllegalArgumentException.class,
-                () -> economyService.createRequestWithBounty("student1", request, -5));
+                () -> economyService.createRequestWithBounty("student1", request, -5, null, null));
         assertThrows(IllegalArgumentException.class,
-                () -> economyService.createRequestWithBounty("student1", request, 51));
+                () -> economyService.createRequestWithBounty("student1", request, 51, null, null));
         assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
     }
 
@@ -317,13 +328,13 @@ class PlatformRulesTests {
     void aBountyOfZeroOrFiftyIsAccepted() {
         User student = userRepository.findByUsername("student1");
         TutoringRequest free = economyService.createRequestWithBounty(
-                "student1", newRequest(student, "HCDD 412", "No bounty"), 0);
+                "student1", newRequest(student, "HCDD 412", "No bounty"), 0, null, null);
         assertEquals("OPEN", free.getStatus());
         assertEquals(0, free.getBountyValue());
         assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
 
         TutoringRequest full = economyService.createRequestWithBounty(
-                "student1", newRequest(student, "HCDD 412", "Full bounty"), 50);
+                "student1", newRequest(student, "HCDD 412", "Full bounty"), 50, null, null);
         assertEquals("OPEN", full.getStatus());
         assertEquals(50, full.getBountyValue());
         assertEquals(50, userRepository.findByUsername("student1").getTokenBalance());
@@ -551,7 +562,7 @@ class PlatformRulesTests {
                 .andExpect(content().string(containsString("Offer me")))
                 .andExpect(content().string(containsString("Jun 2, 3:30 PM")));
 
-        mockMvc.perform(get("/student/requests").with(user("student1").roles("STUDENT")))
+        mockMvc.perform(get("/student/requests/" + request.getId()).with(user("student1").roles("STUDENT")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Time offers")))
                 .andExpect(content().string(containsString("Offer me")));
@@ -606,11 +617,15 @@ class PlatformRulesTests {
                         .param("username", "ada")
                         .param("password", "first-password")
                         .param("confirmPassword", "first-password"))
-                .andExpect(status().isOk())
+                .andExpect(redirectedUrl("/recovery-code"))
                 .andReturn();
-        String body = created.getResponse().getContentAsString();
-        int start = body.indexOf("id=\"recovery-code\">") + "id=\"recovery-code\">".length();
-        String code = body.substring(start, body.indexOf('<', start));
+        String code = (String) created.getFlashMap().get("recoveryCode");
+
+        mockMvc.perform(get("/recovery-code").flashAttr("recoveryCode", code).flashAttr("username", "ada"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"recovery-code\">" + code + "<")));
+        mockMvc.perform(get("/recovery-code"))
+                .andExpect(redirectedUrl("/login"));
 
         mockMvc.perform(post("/register")
                         .with(csrf())
@@ -643,8 +658,7 @@ class PlatformRulesTests {
                         .param("username", "ada")
                         .param("password", "first-password")
                         .param("confirmPassword", "first-password"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"recovery-code\"")));
+                .andExpect(redirectedUrl("/recovery-code"));
 
         mockMvc.perform(post("/register")
                         .with(csrf())
@@ -670,8 +684,8 @@ class PlatformRulesTests {
                         .param("confirmPassword", "tutor-password")
                         .param("courses", "HCDD 412")
                         .param("courses", "IST 311"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"recovery-code\"")));
+                .andExpect(redirectedUrl("/recovery-code"))
+                .andExpect(flash().attributeExists("recoveryCode"));
 
         User applicant = userRepository.findByUsername("applicant1");
         assertEquals("APPLICANT", applicant.getRole());
@@ -700,7 +714,7 @@ class PlatformRulesTests {
                         .param("password", "tutor-password")
                         .param("confirmPassword", "tutor-password")
                         .param("courses", "HCDD 412"))
-                .andExpect(status().isOk());
+                .andExpect(redirectedUrl("/recovery-code"));
 
         MvcResult login = mockMvc.perform(post("/login")
                         .param("username", "applicant2")
@@ -786,7 +800,7 @@ class PlatformRulesTests {
     }
 
     @Test
-    void figuringItOutSavesATriageNoteWithoutARequest() throws Exception {
+    void figuringItOutWithTheOfflineNoteKeepsTheAttemptButAddsNoArticle() throws Exception {
         MockHttpSession session = duckSession("Solved alone", "I am stuck on the concept.");
 
         mockMvc.perform(post("/student/requests/duck/solved")
@@ -806,7 +820,7 @@ class PlatformRulesTests {
                         .param("studentExplanation", "The loop variable was never updated.")
                         .param("takeaway", "Setters can refuse bad values."))
                 .andExpect(redirectedUrl("/student/dashboard"))
-                .andExpect(flash().attributeExists("successMessage"));
+                .andExpect(flash().attribute("successMessage", "Saved."));
 
         assertEquals(0, requestRepository.count());
         var drafts = duckDraftRepository.findByStudentIdOrderByCreatedAtDesc(
@@ -815,16 +829,8 @@ class PlatformRulesTests {
         assertEquals("SOLVED", drafts.get(0).getOutcome());
         assertEquals("Setters can refuse bad values.", drafts.get(0).getTakeaway());
         assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
-        var articles = knowledgeArticleRepository
-                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Solved alone");
-        assertEquals(1, articles.size());
-        assertEquals("triage", articles.get(0).getKind());
-        assertEquals("Solved alone", articles.get(0).getProblemDescription());
-        assertEquals(SocraticNotes.offline("Solved alone").trim(), articles.get(0).getVerifiedSolution());
-        assertFalse(articles.get(0).getProblemDescription().contains("The loop variable was never updated."));
-        assertFalse(articles.get(0).getVerifiedSolution().contains("The loop variable was never updated."));
-        assertFalse(articles.get(0).getVerifiedSolution().contains("Setters can refuse bad values."));
-        assertFalse(articles.get(0).getProblemDescription().contains("Setters can refuse bad values."));
+        assertEquals(0, knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Solved alone").size());
 
         mockMvc.perform(get("/student/dashboard").with(user("student1").roles("STUDENT")))
                 .andExpect(status().isOk())
@@ -837,8 +843,7 @@ class PlatformRulesTests {
                         .param("topic", "Solved alone")
                         .with(user("student1").roles("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Soquacktic")))
-                .andExpect(content().string(containsString("Solved alone is the idea to clarify")))
+                .andExpect(content().string(not(containsString("Solved alone is the idea to clarify"))))
                 .andExpect(content().string(not(containsString("The loop variable was never updated."))))
                 .andExpect(content().string(not(containsString("I am stuck on the concept."))));
     }
@@ -881,12 +886,8 @@ class PlatformRulesTests {
                 .andExpect(redirectedUrl("/student/dashboard"));
 
         assertEquals(0, requestRepository.count());
-        var articles = knowledgeArticleRepository
-                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Loop counters");
-        assertEquals(1, articles.size());
-        assertTrue(articles.get(0).getVerifiedSolution().contains("I forgot to increment the counter."));
-        assertFalse(articles.get(0).getVerifiedSolution().contains("The condition checks the wrong variable."));
-        assertFalse(articles.get(0).getVerifiedSolution().contains("is the idea to clarify"));
+        assertEquals(0, knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Loop counters").size());
     }
 
     @Test
@@ -922,9 +923,7 @@ class PlatformRulesTests {
         User student = userRepository.findByUsername("student1");
         TutoringRequest request = newRequest(student, "HCDD 412", "Triage topic");
         request.setBountyValue(10);
-        request = economyService.createRequestWithBounty("student1", request, 10);
-        request.setAiDiagnosticNote(SocraticNotes.offline("Triage topic"));
-        request = requestRepository.save(request);
+        request = economyService.createRequestWithBounty("student1", request, 10, LIVE_NOTE, null);
         assertEquals(90, userRepository.findByUsername("student1").getTokenBalance());
 
         mockMvc.perform(post("/tutor/requests/" + request.getId() + "/offers")
@@ -1180,7 +1179,7 @@ class PlatformRulesTests {
         User student = userRepository.findByUsername("student1");
         User tutor = userRepository.findByUsername("tutor1");
         TutoringRequest request = economyService.createRequestWithBounty(
-                "student1", newRequest(student, "HCDD 412", "Pay the tutor"), 15);
+                "student1", newRequest(student, "HCDD 412", "Pay the tutor"), 15, null, null);
         request.setStatus("CLAIMED");
         request.setAssignedTutorId(tutor.getId());
         request = requestRepository.save(request);
@@ -1317,19 +1316,6 @@ class PlatformRulesTests {
     }
 
     @Test
-    void theRequestListShowsOnlyTheOwner() throws Exception {
-        User other = saveStudent("list-owner");
-        requestRepository.save(newRequest(other, "HCDD 412", "Only student two can see this topic"));
-
-        mockMvc.perform(get("/student/requests").with(user("student1").roles("STUDENT")))
-                .andExpect(status().isOk())
-                .andExpect(content().string(not(containsString("Only student two can see this topic"))));
-        mockMvc.perform(get("/student/requests").with(user("list-owner").roles("STUDENT")))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Only student two can see this topic")));
-    }
-
-    @Test
     void theDashboardShowsOnlyThatStudentsDrafts() throws Exception {
         User other = saveStudent("draft-owner");
         TutoringRequest request = requestRepository.save(newRequest(other, "HCDD 412", "Private draft"));
@@ -1381,7 +1367,7 @@ class PlatformRulesTests {
     void aTutorCannotCancelAnOpenRequest() throws Exception {
         User student = userRepository.findByUsername("student1");
         TutoringRequest request = economyService.createRequestWithBounty(
-                "student1", newRequest(student, "HCDD 412", "Still open"), 12);
+                "student1", newRequest(student, "HCDD 412", "Still open"), 12, null, null);
 
         mockMvc.perform(post("/tutor/requests/" + request.getId() + "/cancel")
                         .with(user("tutor1").roles("TUTOR"))
@@ -1513,7 +1499,7 @@ class PlatformRulesTests {
             User student = saveStudent("cap-" + wave);
             setBalance(student.getUsername(), 50);
             for (int i = 0; i < 2; i++) {
-                economyService.createRequestWithBounty(student.getUsername(), newRequest(student, "HCDD 412", "held-" + i), 0);
+                economyService.createRequestWithBounty(student.getUsername(), newRequest(student, "HCDD 412", "held-" + i), 0, null, null);
             }
             ExecutorService pool = Executors.newFixedThreadPool(16);
             List<Future<?>> tasks = new ArrayList<>();
@@ -1522,7 +1508,7 @@ class PlatformRulesTests {
                 tasks.add(pool.submit(() -> {
                     try {
                         economyService.createRequestWithBounty(student.getUsername(),
-                                newRequest(student, "HCDD 412", "race-" + n), 0);
+                                newRequest(student, "HCDD 412", "race-" + n), 0, null, null);
                     } catch (IllegalStateException | IllegalArgumentException | ObjectOptimisticLockingFailureException ignored) {
                         // a refused post or a reloaded balance leaves the committed rows as they are
                     }
@@ -1778,40 +1764,51 @@ class PlatformRulesTests {
                         .with(user("student1").roles("STUDENT")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(triage.getId().intValue()))
-                .andExpect(jsonPath("$[0].kind").value("triage"));
+                .andExpect(jsonPath("$[0].kind").value("triage"))
+                .andExpect(jsonPath("$[0].sections[0].label").value("Core concept"))
+                .andExpect(jsonPath("$[0].sections[2].label").value("Starting step"));
         assertFalse(seeded.getId().equals(triage.getId()));
     }
 
     @Test
-    void solvingTheSameTopicTwiceKeepsOneTriageNote() throws Exception {
-        MockHttpSession first = duckSession("Dedupe topic", "I am stuck on the concept.");
-        mockMvc.perform(post("/student/requests/duck/solved")
-                        .session(first)
-                        .with(user("student1").roles("STUDENT"))
-                        .with(csrf())
-                        .param("studentExplanation", "The first attempt.")
-                        .param("takeaway", "First pass."))
-                .andExpect(redirectedUrl("/student/dashboard"));
+    void aSecondNoteOnTheSameTopicKeepsTheFirst() {
+        String second = LIVE_NOTE.replace("Trace two passes", "Print the counter");
 
-        MockHttpSession second = duckSession("Dedupe topic", "I am stuck on the concept.");
-        mockMvc.perform(post("/student/requests/duck/reply")
-                        .session(second)
-                        .with(user("student1").roles("STUDENT"))
-                        .with(csrf())
-                        .param("studentExplanation", "I named the loop variable."))
-                .andExpect(status().isOk());
-        mockMvc.perform(post("/student/requests/duck/solved")
-                        .session(second)
-                        .with(user("student1").roles("STUDENT"))
-                        .with(csrf())
-                        .param("takeaway", "Second pass."))
-                .andExpect(redirectedUrl("/student/dashboard"));
+        assertTrue(knowledgeBankService.saveTriage("HCDD 412", "Dedupe topic", LIVE_NOTE));
+        assertFalse(knowledgeBankService.saveTriage("HCDD 412", "Dedupe topic", second));
 
         var articles = knowledgeArticleRepository
                 .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Dedupe topic");
         assertEquals(1, articles.size());
-        assertEquals(SocraticNotes.offlineFollowUp("Dedupe topic", "I named the loop variable.").trim(),
-                articles.get(0).getVerifiedSolution());
+        assertEquals(LIVE_NOTE.trim(), articles.get(0).getNoteText());
+    }
+
+    @Test
+    void offlineNotesAreNeverSavedToTheDatabank() {
+        assertFalse(knowledgeBankService.saveTriage("HCDD 412", "Offline topic",
+                SocraticNotes.offline("Offline topic")));
+        assertFalse(knowledgeBankService.saveTriage("HCDD 412", "Offline topic",
+                SocraticNotes.offlineFollowUp("Offline topic", "I renamed the variable.")));
+
+        assertEquals(0, knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Offline topic").size());
+    }
+
+    @Test
+    void closingFromAnOfflineNoteRefundsWithoutAnArticle() throws Exception {
+        User student = userRepository.findByUsername("student1");
+        TutoringRequest request = economyService.createRequestWithBounty("student1",
+                newRequest(student, "HCDD 412", "Offline close"), 5, SocraticNotes.offline("Offline close"), null);
+
+        mockMvc.perform(post("/student/requests/" + request.getId() + "/triage")
+                        .with(user("student1").roles("STUDENT"))
+                        .with(csrf()))
+                .andExpect(flash().attribute("successMessage", "Request closed. Your bounty was refunded."));
+
+        assertEquals("RESOLVED", requestRepository.findById(request.getId()).orElseThrow().getStatus());
+        assertEquals(100, userRepository.findByUsername("student1").getTokenBalance());
+        assertEquals(0, knowledgeArticleRepository
+                .findByCourseIgnoreCaseAndTopicContainingIgnoreCase("HCDD 412", "Offline close").size());
     }
 
     @Test
@@ -1990,8 +1987,8 @@ class PlatformRulesTests {
                         .param("username", "newadmin")
                         .param("password", "temporary-1")
                         .param("confirmPassword", "temporary-1"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("was created")));
+                .andExpect(redirectedUrl("/admin"))
+                .andExpect(flash().attribute("successMessage", containsString("was created")));
         User created = userRepository.findByUsername("newadmin");
         assertEquals("ADMIN", created.getRole());
         assertTrue(created.isMustChangePassword());
@@ -2145,7 +2142,7 @@ class PlatformRulesTests {
         for (int wave = 1; wave <= 20; wave++) {
             int before = userRepository.findByUsername("tutor1").getTokenBalance();
             TutoringRequest request = economyService.createRequestWithBounty(
-                    "student1", newRequest(student, "HCDD 412", "Resolve race " + wave), 5);
+                    "student1", newRequest(student, "HCDD 412", "Resolve race " + wave), 5, null, null);
             request.setStatus("CLAIMED");
             request.setAssignedTutorId(tutor.getId());
             request = requestRepository.save(request);
@@ -2562,19 +2559,19 @@ class PlatformRulesTests {
         tutorB.setTokenBalance(40);
         tutorB = userRepository.save(tutorB);
         TutoringRequest refundable = economyService.createRequestWithBounty(
-                student.getUsername(), newRequest(student, "HCDD 412", "refund-" + wave), 5);
+                student.getUsername(), newRequest(student, "HCDD 412", "refund-" + wave), 5, null, null);
         TutoringRequest payA = economyService.createRequestWithBounty(
-                student.getUsername(), newRequest(student, "HCDD 412", "pay-a-" + wave), 7);
+                student.getUsername(), newRequest(student, "HCDD 412", "pay-a-" + wave), 7, null, null);
         payA.setStatus("CLAIMED");
         payA.setAssignedTutorId(tutorA.getId());
         payA = requestRepository.save(payA);
         TutoringRequest payB = economyService.createRequestWithBounty(
-                student.getUsername(), newRequest(student, "HCDD 412", "pay-b-" + wave), 9);
+                student.getUsername(), newRequest(student, "HCDD 412", "pay-b-" + wave), 9, null, null);
         payB.setStatus("CLAIMED");
         payB.setAssignedTutorId(tutorB.getId());
         payB = requestRepository.save(payB);
         TutoringRequest reviewed = economyService.createRequestWithBounty(
-                student.getUsername(), newRequest(student, "HCDD 412", "review-" + wave), 0);
+                student.getUsername(), newRequest(student, "HCDD 412", "review-" + wave), 0, null, null);
         reviewed.setStatus("RESOLVED");
         reviewed.setAssignedTutorId(tutorA.getId());
         reviewed = requestRepository.save(reviewed);
@@ -2596,7 +2593,7 @@ class PlatformRulesTests {
             int n = i;
             tasks.add(pool.submit(() -> {
                 try {
-                    economyService.createRequestWithBounty(studentName, newRequest(student, "HCDD 412", "bounty-" + wave + "-" + n), 1);
+                    economyService.createRequestWithBounty(studentName, newRequest(student, "HCDD 412", "bounty-" + wave + "-" + n), 1, null, null);
                 } catch (RuntimeException ignored) {
                     // a conflict rolls the post back
                 }
@@ -2848,6 +2845,21 @@ class PlatformRulesTests {
         request.setCreationTimestamp(created);
         request.setBountyValue(bounty);
         return requestRepository.save(request);
+    }
+
+    @Test
+    void aSecondReviewOfTheSameSessionFailsWithoutASecondReward() {
+        User student = userRepository.findByUsername("student1");
+        User tutor = userRepository.findByUsername("tutor1");
+        TutoringRequest request = requestRepository.save(newRequest(student, "HCDD 412", "Reviewed twice"));
+        int before = student.getTokenBalance();
+
+        economyService.saveReviewAndReward(review(request.getId(), tutor.getId(), student.getId(), 5));
+        assertThrows(DataIntegrityViolationException.class, () ->
+                economyService.saveReviewAndReward(review(request.getId(), tutor.getId(), student.getId(), 4)));
+
+        assertEquals(1, reviewRepository.count());
+        assertEquals(before + 10, userRepository.findByUsername("student1").getTokenBalance());
     }
 
     private Review review(Long requestId, Long tutorId, Long studentId, int score) {

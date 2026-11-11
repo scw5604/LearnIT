@@ -4,8 +4,6 @@ import com.rapidtutor.model.KnowledgeArticle;
 import com.rapidtutor.repository.KnowledgeArticleRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-
 @Service
 public class KnowledgeBankService {
 
@@ -19,21 +17,27 @@ public class KnowledgeBankService {
         this.knowledgeArticleRepository = knowledgeArticleRepository;
     }
 
-    /** Stores the course, topic, and diagnostic note. The student's own writing is not copied here. */
-    public KnowledgeArticle saveTriage(String course, String topic, String note) {
-        String safeTopic = clip(topic, 240);
-        String safeNote = clip(note, TEXT_LIMIT);
-        Optional<KnowledgeArticle> existing = knowledgeArticleRepository
-                .findFirstByCourseIgnoreCaseAndTopicIgnoreCaseAndKindIgnoreCaseOrderByCreatedAtDesc(
-                        course, safeTopic, TRIAGE);
-        if (existing.isPresent()) {
-            KnowledgeArticle article = existing.get();
-            article.setVerifiedSolution(safeNote);
-            return knowledgeArticleRepository.save(article);
+    /**
+     * Stores the course, topic, and diagnostic note. The student's own writing is not copied here.
+     * Returns false when nothing was stored: the note is the offline text, or that course and topic
+     * already have a note, which is kept so one student cannot replace what others read.
+     */
+    public boolean saveTriage(String course, String topic, String note) {
+        if (note == null || note.isBlank() || SocraticNotes.isOffline(note)) {
+            return false;
         }
-        KnowledgeArticle article = new KnowledgeArticle(course, safeTopic, safeTopic, safeNote);
+        String safeTopic = clip(topic, 240);
+        boolean exists = knowledgeArticleRepository
+                .findFirstByCourseIgnoreCaseAndTopicIgnoreCaseAndKindIgnoreCaseOrderByCreatedAtDesc(
+                        course, safeTopic, TRIAGE)
+                .isPresent();
+        if (exists) {
+            return false;
+        }
+        KnowledgeArticle article = new KnowledgeArticle(course, safeTopic, safeTopic, clip(note, TEXT_LIMIT));
         article.setKind(TRIAGE);
-        return knowledgeArticleRepository.save(article);
+        knowledgeArticleRepository.save(article);
+        return true;
     }
 
     private static String clip(String value, int max) {

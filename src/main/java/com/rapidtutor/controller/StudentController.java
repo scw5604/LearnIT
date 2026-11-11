@@ -16,10 +16,13 @@ import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.AiDiagnosisService;
 import com.rapidtutor.service.EconomyService;
+import com.rapidtutor.service.FormText;
 import com.rapidtutor.service.KnowledgeBankService;
 import com.rapidtutor.service.MeetingOfferService;
+import com.rapidtutor.service.PublicNames;
 import com.rapidtutor.service.RequestFields;
 import com.rapidtutor.service.TriageCloseService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Controller;
@@ -35,6 +38,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static com.rapidtutor.model.RequestStatus.CLAIMED;
+import static com.rapidtutor.model.RequestStatus.OPEN;
+import static com.rapidtutor.model.RequestStatus.RESOLVED;
 
 @Controller
 @RequestMapping("/student")
@@ -52,6 +59,7 @@ public class StudentController {
     private final KnowledgeBankService knowledgeBankService;
     private final TriageCloseService triageCloseService;
     private final DuckDraftRepository draftRepository;
+    private final PublicNames publicNames;
 
     public StudentController(EconomyService economyService, TutoringRequestRepository requestRepository,
                              ReviewRepository reviewRepository, AiDiagnosisService aiDiagnosisService,
@@ -60,7 +68,7 @@ public class StudentController {
                              KnowledgeArticleRepository knowledgeArticleRepository,
                              KnowledgeBankService knowledgeBankService,
                              TriageCloseService triageCloseService,
-                             DuckDraftRepository draftRepository) {
+                             DuckDraftRepository draftRepository, PublicNames publicNames) {
         this.economyService = economyService;
         this.requestRepository = requestRepository;
         this.reviewRepository = reviewRepository;
@@ -73,6 +81,7 @@ public class StudentController {
         this.knowledgeBankService = knowledgeBankService;
         this.triageCloseService = triageCloseService;
         this.draftRepository = draftRepository;
+        this.publicNames = publicNames;
     }
 
     /**
@@ -118,7 +127,7 @@ public class StudentController {
             return "redirect:/student/requests/new";
         }
         try {
-            String explanation = requiredExplanation(studentExplanation);
+            String explanation = checkedExplanation(studentExplanation);
             draft.setAnswer(explanation);
             draftRepository.save(draft);
             session.setAttribute(DuckDraft.BOOKING_KEY, Boolean.TRUE);
@@ -140,17 +149,17 @@ public class StudentController {
             return "redirect:/student/requests/new";
         }
         try {
-            String cleanTakeaway = requiredTakeaway(takeaway);
+            String cleanTakeaway = checkedTakeaway(takeaway);
             if (studentExplanation != null && !studentExplanation.isBlank()) {
-                draft.setAnswer(requiredExplanation(studentExplanation));
+                draft.setAnswer(checkedExplanation(studentExplanation));
             }
-            knowledgeBankService.saveTriage(draft.getCourse(), draft.getTopic(), draft.savedNote());
+            boolean added = knowledgeBankService.saveTriage(draft.getCourse(), draft.getTopic(), draft.savedNote());
             draft.setTakeaway(cleanTakeaway);
             draft.setOutcome(DuckDraft.SOLVED);
             draftRepository.save(draft);
             clearDuck(session);
             redirectAttributes.addFlashAttribute("successMessage",
-                    "Saved. The note was added to the databank.");
+                    added ? "Saved. The note was added to the databank." : "Saved.");
             return "redirect:/student/dashboard";
         } catch (IllegalArgumentException e) {
             return duckForm(model, draft, studentExplanation, takeaway, e.getMessage(), bookingOpen(session));
@@ -171,7 +180,7 @@ public class StudentController {
                     "Soquacktic already replied once. Start over for a new note.", bookingOpen(session));
         }
         try {
-            String explanation = requiredExplanation(studentExplanation);
+            String explanation = checkedExplanation(studentExplanation);
             String reply = aiDiagnosisService.prepareFollowUp(
                     draft.getCourse(),
                     draft.getTopic(),
@@ -200,11 +209,11 @@ public class StudentController {
             return "redirect:/student/requests/new";
         }
         try {
-            String cleanTakeaway = requiredTakeaway(takeaway);
+            String cleanTakeaway = checkedTakeaway(takeaway);
             draftRepository.save(DuckDraft.clearedFromNote(
                     article.getCourse(),
                     article.getTopic(),
-                    article.getVerifiedSolution(),
+                    article.getNoteText(),
                     cleanTakeaway,
                     student.getId()));
             redirectAttributes.addFlashAttribute("successMessage", "Saved.");
@@ -243,7 +252,7 @@ public class StudentController {
         DuckDraft draft = duckDraft(session, student);
         if (draft != null) {
             try {
-                String explanation = requiredExplanation(studentExplanation);
+                String explanation = checkedExplanation(studentExplanation);
                 TutoringRequest request = draft.toRequest();
                 RequestFields.booking(request, preferredMeetingMethod, desiredResponseTime, expectedEffort, bountyValue);
                 TutoringRequest created = economyService.createRequestWithBounty(
@@ -279,12 +288,12 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         TutoringRequest request = requestRepository.findById(draft.getRequestId()).orElse(null);
-        if (request == null || !student.getId().equals(request.getStudentId()) || !"RESOLVED".equals(request.getStatus())) {
+        if (request == null || !student.getId().equals(request.getStudentId()) || !RESOLVED.equals(request.getStatus())) {
             redirectAttributes.addFlashAttribute("errorMessage", "Resolve the session before writing what changed.");
             return "redirect:/student/dashboard";
         }
         try {
-            draft.setTakeaway(requiredTakeaway(takeaway));
+            draft.setTakeaway(checkedTakeaway(takeaway));
             draftRepository.save(draft);
             redirectAttributes.addFlashAttribute("successMessage", "Saved what changed.");
         } catch (IllegalArgumentException e) {
@@ -339,57 +348,12 @@ public class StudentController {
         return "student/dashboard";
     }
 
-    @GetMapping("/requests")
-    public String showRequests(Model model, Principal principal) {
-        User student = requireStudent(principal);
-        List<TutoringRequest> requests = requestRepository.findByStudentIdOrderByCreationTimestampDesc(student.getId());
-        List<Long> openIds = new ArrayList<>();
-        List<Long> tutorIds = new ArrayList<>();
-        for (TutoringRequest request : requests) {
-            if ("OPEN".equals(request.getStatus())) {
-                openIds.add(request.getId());
-            }
-            if (request.getAssignedTutorId() != null && !tutorIds.contains(request.getAssignedTutorId())) {
-                tutorIds.add(request.getAssignedTutorId());
-            }
-        }
-        Map<Long, Long> offerCounts = new HashMap<>();
-        if (!openIds.isEmpty()) {
-            for (Object[] row : offerRepository.countGroupedByRequestId(openIds)) {
-                offerCounts.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
-            }
-        }
-        Map<Long, String> namesByTutorId = namesFor(tutorIds);
-        Map<Long, String> tutorNames = new HashMap<>();
-        List<TutoringRequest> offeredRequests = new ArrayList<>();
-        List<TutoringRequest> otherRequests = new ArrayList<>();
-        for (TutoringRequest request : requests) {
-            long offers = offerCounts.getOrDefault(request.getId(), 0L);
-            if ("OPEN".equals(request.getStatus())) {
-                offerCounts.put(request.getId(), offers);
-            }
-            String tutorName = request.getAssignedTutorId() == null ? null : namesByTutorId.get(request.getAssignedTutorId());
-            tutorNames.put(request.getId(), tutorName);
-            if ("OPEN".equals(request.getStatus()) && offers > 0) {
-                offeredRequests.add(request);
-            } else {
-                otherRequests.add(request);
-            }
-        }
-        model.addAttribute("requests", requests);
-        model.addAttribute("offeredRequests", offeredRequests);
-        model.addAttribute("otherRequests", otherRequests);
-        model.addAttribute("offerCounts", offerCounts);
-        model.addAttribute("tutorNames", tutorNames);
-        return "student/requests";
-    }
-
     @PostMapping("/requests/{id}/cancel")
     public String cancelRequest(@PathVariable Long id, Principal principal, RedirectAttributes redirectAttributes) {
         User student = requireStudent(principal);
         try {
             String from = economyService.cancel(student, id);
-            if ("CLAIMED".equals(from)) {
+            if (CLAIMED.equals(from)) {
                 redirectAttributes.addFlashAttribute("successMessage", "Session canceled and the bounty was refunded.");
             } else {
                 redirectAttributes.addFlashAttribute("successMessage", "Request canceled and the bounty was refunded.");
@@ -426,7 +390,7 @@ public class StudentController {
         if (request == null) {
             return "redirect:/student/dashboard";
         }
-        if (!"RESOLVED".equals(request.getStatus())) {
+        if (!RESOLVED.equals(request.getStatus())) {
             redirectAttributes.addFlashAttribute("errorMessage", "Resolve the session before leaving a review.");
             return "redirect:/student/dashboard";
         }
@@ -454,7 +418,7 @@ public class StudentController {
         if (request == null) {
             return "redirect:/student/dashboard";
         }
-        if (!"RESOLVED".equals(request.getStatus())) {
+        if (!RESOLVED.equals(request.getStatus())) {
             redirectAttributes.addFlashAttribute("errorMessage", "Resolve the session before leaving a review.");
             return "redirect:/student/dashboard";
         }
@@ -473,7 +437,7 @@ public class StudentController {
             model.addAttribute("errorMessage", "Score must be between 1 and 5.");
             return "student/leave-review";
         }
-        String trimmedFeedback = blankToNull(feedback);
+        String trimmedFeedback = FormText.blankToNull(feedback);
         if (trimmedFeedback != null && trimmedFeedback.length() > 1000) {
             model.addAttribute("request", request);
             model.addAttribute("score", score);
@@ -488,7 +452,12 @@ public class StudentController {
         review.setStudentId(student.getId());
         review.setScore(score);
         review.setFeedback(trimmedFeedback);
-        economyService.saveReviewAndReward(review);
+        try {
+            economyService.saveReviewAndReward(review);
+        } catch (DataIntegrityViolationException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "You already reviewed this session.");
+            return "redirect:/student/dashboard";
+        }
         redirectAttributes.addFlashAttribute("successMessage", "Thanks for the review. 10 tokens were added to your balance.");
         return "redirect:/student/dashboard";
     }
@@ -502,13 +471,13 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         model.addAttribute("request", request);
-        model.addAttribute("tutorName", tutorDisplayName(request));
+        model.addAttribute("tutorName", publicNames.of(request.getAssignedTutorId()));
         model.addAttribute("alreadyReviewed", reviewRepository.findByRequestId(request.getId()).isPresent());
         model.addAttribute("events", eventRepository.findByRequestIdOrderByAtAsc(request.getId()));
-        if ("OPEN".equals(request.getStatus())) {
+        if (OPEN.equals(request.getStatus())) {
             List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(request.getId());
             model.addAttribute("offers", offers);
-            model.addAttribute("tutorNamesById", publicNames(offers));
+            model.addAttribute("tutorNamesById", publicNames.byId(offers.stream().map(MeetingOffer::getTutorId).toList()));
         }
         return "student/request-details";
     }
@@ -532,9 +501,10 @@ public class StudentController {
     public String closeFromNote(@PathVariable Long id, Principal principal, RedirectAttributes redirectAttributes) {
         User student = requireStudent(principal);
         try {
-            triageCloseService.close(student, id);
-            redirectAttributes.addFlashAttribute("successMessage",
-                    "Request closed. Your bounty was refunded, and the note was saved to the databank.");
+            boolean added = triageCloseService.close(student, id);
+            redirectAttributes.addFlashAttribute("successMessage", added
+                    ? "Request closed. Your bounty was refunded, and the note was saved to the databank."
+                    : "Request closed. Your bounty was refunded.");
             return "redirect:/student/requests/" + id;
         } catch (ObjectOptimisticLockingFailureException e) {
             redirectAttributes.addFlashAttribute("errorMessage", "This request changed. Open it and try again.");
@@ -590,62 +560,12 @@ public class StudentController {
         session.removeAttribute(DuckDraft.BOOKING_KEY);
     }
 
-    private String requiredExplanation(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Explain what you have already tried.");
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() > 2000) {
-            throw new IllegalArgumentException("Keep that explanation under 2000 characters.");
-        }
-        return trimmed;
-    }
-
-    private String tutorDisplayName(TutoringRequest request) {
-        if (request.getAssignedTutorId() == null) {
-            return null;
-        }
-        return userRepository.findById(request.getAssignedTutorId()).map(User::getPublicName).orElse(null);
-    }
-
-    private Map<Long, String> publicNames(List<MeetingOffer> offers) {
-        List<Long> tutorIds = new ArrayList<>();
-        for (MeetingOffer offer : offers) {
-            if (offer.getTutorId() != null && !tutorIds.contains(offer.getTutorId())) {
-                tutorIds.add(offer.getTutorId());
-            }
-        }
-        return namesFor(tutorIds);
-    }
-
-    private Map<Long, String> namesFor(List<Long> tutorIds) {
-        Map<Long, String> names = new HashMap<>();
-        if (tutorIds.isEmpty()) {
-            return names;
-        }
-        for (User user : userRepository.findAllById(tutorIds)) {
-            names.put(user.getId(), user.getPublicName());
-        }
-        return names;
-    }
-
     private TutoringRequest draftRequest(String course, String topic, String description) {
         TutoringRequest request = new TutoringRequest();
         request.setCourse(course);
         request.setTopic(topic);
         request.setShortDescription(description);
         return request;
-    }
-
-    private String requiredTakeaway(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Write what you understand now.");
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() > 500) {
-            throw new IllegalArgumentException("Keep that entry under 500 characters.");
-        }
-        return trimmed;
     }
 
     private User requireStudent(Principal principal) {
@@ -672,11 +592,12 @@ public class StudentController {
         return request;
     }
 
-    private String blankToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+    private static String checkedExplanation(String value) {
+        return FormText.required(value, "Explain what you have already tried.", 2000,
+                "Keep that explanation under 2000 characters.");
+    }
+
+    private static String checkedTakeaway(String value) {
+        return FormText.required(value, "Write what you understand now.", 500);
     }
 }

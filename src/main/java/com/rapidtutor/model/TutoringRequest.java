@@ -36,8 +36,10 @@ public class TutoringRequest {
 
     @PrePersist
     protected void onCreate() {
-        this.creationTimestamp = LocalDateTime.now();
-        this.status = "OPEN";
+        if (this.creationTimestamp == null) {
+            this.creationTimestamp = LocalDateTime.now();
+        }
+        this.status = RequestStatus.OPEN;
     }
 
     private Integer bountyValue = 0;

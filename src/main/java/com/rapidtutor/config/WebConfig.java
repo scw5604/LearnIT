@@ -24,6 +24,8 @@ public class WebConfig implements WebMvcConfigurer {
                         "/logout",
                         "/account/password",
                         "/register",
+                        "/recovery-code",
+                        "/error",
                         "/forgot-password",
                         "/apply/tutor",
                         "/h2-console/**");

@@ -1,17 +1,42 @@
 package com.rapidtutor.service;
 
+import java.util.List;
+
 public final class SocraticNotes {
 
     private static final int DESCRIPTION_LIMIT = 800;
+
+    private static final String OFFLINE_CONCEPT_END = " is the idea to clarify before the session.";
+    private static final String OFFLINE_QUESTION_START = "Diagnostic question: What have you already tried with ";
+    private static final String FOLLOW_UP_CONCEPT_START = "Core concept: You already started explaining ";
+    private static final String FOLLOW_UP_QUESTION_START = "Diagnostic question: What is still unclear after \"";
 
     private SocraticNotes() {
     }
 
     public static String offline(String topic) {
         String safe = safeTopic(topic);
-        return "Core concept: " + safe + " is the idea to clarify before the session.\n"
-                + "Diagnostic question: What have you already tried with " + safe + "?\n"
+        return "Core concept: " + safe + OFFLINE_CONCEPT_END + "\n"
+                + OFFLINE_QUESTION_START + safe + "?\n"
                 + "Starting step: Write the part of " + safe + " you can explain in one sentence.\n";
+    }
+
+    /** True when the note is one of the offline notes built here rather than a Groq reply. */
+    public static boolean isOffline(String note) {
+        if (note == null) {
+            return false;
+        }
+        List<String> lines = note.strip().lines().toList();
+        if (lines.size() < 2) {
+            return false;
+        }
+        String concept = lines.get(0);
+        String question = lines.get(1);
+        boolean firstNote = concept.startsWith("Core concept: ") && concept.endsWith(OFFLINE_CONCEPT_END)
+                && question.startsWith(OFFLINE_QUESTION_START);
+        boolean followUp = concept.startsWith(FOLLOW_UP_CONCEPT_START)
+                && question.startsWith(FOLLOW_UP_QUESTION_START);
+        return firstNote || followUp;
     }
 
     /**
@@ -21,8 +46,8 @@ public final class SocraticNotes {
     public static String offlineFollowUp(String topic, String answer) {
         String safe = safeTopic(topic);
         String spoken = quote(answer);
-        return "Core concept: You already started explaining " + safe + ".\n"
-                + "Diagnostic question: What is still unclear after \"" + spoken + "\"?\n"
+        return FOLLOW_UP_CONCEPT_START + safe + ".\n"
+                + FOLLOW_UP_QUESTION_START + spoken + "\"?\n"
                 + "Starting step: Rewrite one sentence from \"" + spoken + "\" in your own words.\n";
     }
 

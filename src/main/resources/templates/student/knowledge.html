@@ -41,9 +41,9 @@
                 <p class="rt-kicker mb-1" th:text="${article.course}">HCDD 412</p>
                 <h2 th:text="${article.topic}">Topic</h2>
                 <p class="rt-kicker" th:text="${article.kind == 'triage'} ? 'Soquacktic' : 'Course note'">Course note</p>
-                <div th:if="${article.kind == 'triage'}" th:replace="~{fragments/diagnostic-note :: scaffold(${article.verifiedSolution}, 'bank')}"></div>
+                <div th:if="${article.kind == 'triage'}" th:replace="~{fragments/diagnostic-note :: scaffold(${article.noteText}, 'bank')}"></div>
                 <p th:unless="${article.kind == 'triage'}" th:text="${article.problemDescription}">Question</p>
-                <p class="rt-note" th:unless="${article.kind == 'triage'}" th:text="${article.verifiedSolution}">Note</p>
+                <p class="rt-note" th:unless="${article.kind == 'triage'}" th:text="${article.noteText}">Note</p>
             </article>
         </div>
     </main>

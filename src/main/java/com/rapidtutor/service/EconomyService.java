@@ -12,17 +12,24 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.OptimisticLockException;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+
+import static com.rapidtutor.model.RequestStatus.CANCELED;
+import static com.rapidtutor.model.RequestStatus.CLAIMED;
+import static com.rapidtutor.model.RequestStatus.EXPIRED;
+import static com.rapidtutor.model.RequestStatus.OPEN;
+import static com.rapidtutor.model.RequestStatus.RESOLVED;
 
 @Service
 public class EconomyService {
 
     static final int REVIEW_REWARD = 10;
+    static final int MAX_OPEN_REQUESTS = 3;
 
     private final UserRepository userRepository;
     private final TutoringRequestRepository requestRepository;
@@ -31,11 +38,12 @@ public class EconomyService {
     private final RequestLifecycle lifecycle;
     private final NotificationService notificationService;
     private final EntityManager entityManager;
+    private final Clock clock;
 
     public EconomyService(UserRepository userRepository, TutoringRequestRepository requestRepository,
                           ReviewRepository reviewRepository, MeetingOfferRepository offerRepository,
                           RequestLifecycle lifecycle, NotificationService notificationService,
-                          EntityManager entityManager) {
+                          EntityManager entityManager, Clock clock) {
         this.userRepository = userRepository;
         this.requestRepository = requestRepository;
         this.reviewRepository = reviewRepository;
@@ -43,30 +51,20 @@ public class EconomyService {
         this.lifecycle = lifecycle;
         this.notificationService = notificationService;
         this.entityManager = entityManager;
-    }
-
-    /** Deducts bounty from the student and creates the request in one transaction. */
-    @Transactional
-    public TutoringRequest createRequestWithBounty(String username, TutoringRequest request, Integer offeredBounty) {
-        return openRequest(username, request, offeredBounty, null, null, false);
+        this.clock = clock;
     }
 
     /** Deducts the bounty, stores the note and explanation, and records the open event. */
     @Transactional
     public TutoringRequest createRequestWithBounty(String username, TutoringRequest request, Integer offeredBounty,
                                                     String note, String explanation) {
-        return openRequest(username, request, offeredBounty, note, explanation, true);
-    }
-
-    private TutoringRequest openRequest(String username, TutoringRequest request, Integer offeredBounty,
-                                        String note, String explanation, boolean recordOpen) {
-        if (offeredBounty == null || offeredBounty < 0 || offeredBounty > 50) {
-            throw new IllegalArgumentException("Bounty must be between 0 and 50 tokens.");
+        if (offeredBounty == null || offeredBounty < 0 || offeredBounty > RequestFields.MAX_BOUNTY) {
+            throw new IllegalArgumentException("Bounty must be between 0 and " + RequestFields.MAX_BOUNTY + " tokens.");
         }
 
         User student = userRepository.findByUsername(username);
 
-        if (student == null || !student.getRole().equals("STUDENT")) {
+        if (student == null || !"STUDENT".equals(student.getRole())) {
             throw new IllegalArgumentException("Invalid student account.");
         }
 
@@ -74,8 +72,8 @@ public class EconomyService {
         if (currentBalance < offeredBounty) {
             throw new IllegalStateException("Insufficient token balance to post this bounty.");
         }
-        if (requestRepository.countByStudentIdAndStatus(student.getId(), "OPEN") >= 3) {
-            throw new IllegalStateException("You already have 3 open requests.");
+        if (requestRepository.countByStudentIdAndStatus(student.getId(), OPEN) >= MAX_OPEN_REQUESTS) {
+            throw new IllegalStateException("You already have " + MAX_OPEN_REQUESTS + " open requests.");
         }
 
         student.setTokenBalance(currentBalance - offeredBounty);
@@ -90,11 +88,10 @@ public class EconomyService {
         request.setOfferedMeetingTime(null);
         request.setAiDiagnosticNote(note);
         request.setStudentExplanation(explanation);
-        request.setStatus("OPEN");
+        request.setCreationTimestamp(now());
+        request.setStatus(OPEN);
         TutoringRequest saved = requestRepository.save(request);
-        if (recordOpen) {
-            lifecycle.record(saved.getId(), null, "OPEN", username);
-        }
+        lifecycle.record(saved.getId(), null, OPEN, username);
         return saved;
     }
 
@@ -105,7 +102,7 @@ public class EconomyService {
     @Transactional
     public String cancel(User student, Long requestId) {
         TutoringRequest request = owned(student, requestId);
-        if ("OPEN".equals(request.getStatus())) {
+        if (OPEN.equals(request.getStatus())) {
             List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(requestId);
             cancelAndRefund(requestId);
             offerRepository.deleteByRequestId(requestId);
@@ -114,15 +111,15 @@ public class EconomyService {
                         student.getPublicName() + " canceled the request.",
                         "/tutor/board");
             }
-            lifecycle.record(requestId, "OPEN", "CANCELED", student.getUsername());
-            return "OPEN";
+            lifecycle.record(requestId, OPEN, CANCELED, student.getUsername());
+            return OPEN;
         }
-        if ("CLAIMED".equals(request.getStatus())) {
+        if (CLAIMED.equals(request.getStatus())) {
             Long tutorId = request.getAssignedTutorId();
             cancelClaimed(requestId);
-            lifecycle.record(requestId, "CLAIMED", "CANCELED", student.getUsername());
+            lifecycle.record(requestId, CLAIMED, CANCELED, student.getUsername());
             notificationService.notify(tutorId, student.getPublicName() + " canceled the session.", "/tutor/board");
-            return "CLAIMED";
+            return CLAIMED;
         }
         throw new IllegalStateException("Only an open or claimed session can be canceled.");
     }
@@ -136,7 +133,7 @@ public class EconomyService {
         }
         Long studentId = request.getStudentId();
         cancelClaimed(requestId);
-        lifecycle.record(requestId, "CLAIMED", "CANCELED", tutor.getUsername());
+        lifecycle.record(requestId, CLAIMED, CANCELED, tutor.getUsername());
         notificationService.notify(studentId, tutor.getPublicName() + " canceled the session.", "/student/dashboard");
     }
 
@@ -144,20 +141,20 @@ public class EconomyService {
     @Transactional
     public void resolve(User student, Long requestId) {
         TutoringRequest request = owned(student, requestId);
-        if (!"CLAIMED".equals(request.getStatus())) {
+        if (!CLAIMED.equals(request.getStatus())) {
             throw new IllegalStateException("Only claimed requests can be resolved.");
         }
         resolveAndPayout(requestId, request.getAssignedTutorId());
-        lifecycle.record(requestId, "CLAIMED", "RESOLVED", student.getUsername());
+        lifecycle.record(requestId, CLAIMED, RESOLVED, student.getUsername());
     }
 
-    /** Pays the bounty to the assigned tutor and marks the request resolved. */
+    /** The tutor id must match the request, so a caller cannot pay someone else. */
     @Transactional
     public void resolveAndPayout(Long requestId, Long tutorId) {
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Request not found."));
 
-        if (!request.getStatus().equals("CLAIMED")) {
+        if (!CLAIMED.equals(request.getStatus())) {
             throw new IllegalStateException("Only claimed requests can be resolved.");
         }
         if (tutorId == null || !tutorId.equals(request.getAssignedTutorId())) {
@@ -172,8 +169,8 @@ public class EconomyService {
         tutor.setTokenBalance(currentBalance + bounty);
         saveUser(tutor);
 
-        request.setStatus("RESOLVED");
-        request.setResolvedTimestamp(LocalDateTime.now());
+        request.setStatus(RESOLVED);
+        request.setResolvedTimestamp(now());
         requestRepository.save(request);
     }
 
@@ -182,22 +179,22 @@ public class EconomyService {
     public void resolveFromTriage(Long requestId) {
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Request not found."));
-        if (!"OPEN".equals(request.getStatus())) {
+        if (!OPEN.equals(request.getStatus())) {
             throw new IllegalStateException("Only an open request can be closed from the note.");
         }
         if (request.getAiDiagnosticNote() == null || request.getAiDiagnosticNote().isBlank()) {
             throw new IllegalStateException("A diagnostic note is not ready yet.");
         }
         refundStudent(request);
-        request.setStatus("RESOLVED");
-        request.setResolvedTimestamp(LocalDateTime.now());
+        request.setStatus(RESOLVED);
+        request.setResolvedTimestamp(now());
         requestRepository.save(request);
     }
 
     /** Saves the review and adds the review reward once, in the same transaction. */
     @Transactional
     public void saveReviewAndReward(Review review) {
-        reviewRepository.save(review);
+        reviewRepository.saveAndFlush(review);
         User student = userRepository.findById(review.getStudentId())
                 .orElseThrow(() -> new IllegalArgumentException("Student not found."));
         int currentBalance = student.getTokenBalance() != null ? student.getTokenBalance() : 0;
@@ -205,20 +202,19 @@ public class EconomyService {
         saveUser(student);
     }
 
-    /** Refunds the bounty and marks the request canceled. */
     @Transactional
     public void cancelAndRefund(Long requestId) {
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Request not found."));
 
-        if (!"OPEN".equals(request.getStatus())) {
+        if (!OPEN.equals(request.getStatus())) {
             throw new IllegalStateException("Only open requests can be canceled.");
         }
 
         refundStudent(request);
 
-        request.setStatus("CANCELED");
-        request.setCanceledTimestamp(LocalDateTime.now());
+        request.setStatus(CANCELED);
+        request.setCanceledTimestamp(now());
         requestRepository.save(request);
     }
 
@@ -227,12 +223,12 @@ public class EconomyService {
     public void cancelClaimed(Long requestId) {
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Request not found."));
-        if (!"CLAIMED".equals(request.getStatus())) {
+        if (!CLAIMED.equals(request.getStatus())) {
             throw new IllegalStateException("Only a claimed session can be canceled this way.");
         }
         refundStudent(request);
-        request.setStatus("CANCELED");
-        request.setCanceledTimestamp(LocalDateTime.now());
+        request.setStatus(CANCELED);
+        request.setCanceledTimestamp(now());
         requestRepository.save(request);
     }
 
@@ -241,12 +237,12 @@ public class EconomyService {
     public void expireAndRefund(Long requestId) {
         TutoringRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Request not found."));
-        if (!"OPEN".equals(request.getStatus())) {
+        if (!OPEN.equals(request.getStatus())) {
             throw new IllegalStateException("Only open requests can expire.");
         }
         List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(requestId);
         refundStudent(request);
-        request.setStatus("EXPIRED");
+        request.setStatus(EXPIRED);
         requestRepository.save(request);
         offerRepository.deleteByRequestId(requestId);
         for (MeetingOffer offer : offers) {
@@ -254,7 +250,11 @@ public class EconomyService {
                     "A request you offered on has expired.",
                     "/tutor/board");
         }
-        lifecycle.record(requestId, "OPEN", "EXPIRED", "system");
+        lifecycle.record(requestId, OPEN, EXPIRED, "system");
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.now(clock);
     }
 
     private TutoringRequest owned(User student, Long requestId) {
@@ -282,9 +282,7 @@ public class EconomyService {
         try {
             entityManager.lock(user, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
             userRepository.saveAndFlush(user);
-        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException e) {
-            throw new IllegalStateException("This request changed. Open it and try again.");
-        } catch (OptimisticLockingFailureException e) {
+        } catch (OptimisticLockingFailureException | OptimisticLockException e) {
             throw new IllegalStateException("This request changed. Open it and try again.");
         }
     }

@@ -10,6 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -31,7 +33,7 @@ public class EconomyServiceTests {
 
     @BeforeEach
     void setUp() {
-        economyService = new EconomyService(userRepository, requestRepository, null, null, null, null, null);
+        economyService = new EconomyService(userRepository, requestRepository, null, null, null, null, null, Clock.systemDefaultZone());
     }
 
     @Test
@@ -44,7 +46,7 @@ public class EconomyServiceTests {
         when(userRepository.findByUsername("student1")).thenReturn(student);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class, () ->
-                economyService.createRequestWithBounty("student1", new TutoringRequest(), 20));
+                economyService.createRequestWithBounty("student1", new TutoringRequest(), 20, null, null));
 
         assertEquals("Insufficient token balance to post this bounty.", thrown.getMessage());
         assertEquals(10, student.getTokenBalance());
@@ -62,7 +64,7 @@ public class EconomyServiceTests {
         when(userRepository.findByUsername("student1")).thenReturn(student);
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class, () ->
-                economyService.createRequestWithBounty("student1", new TutoringRequest(), 10));
+                economyService.createRequestWithBounty("student1", new TutoringRequest(), 10, null, null));
 
         assertEquals("Insufficient token balance to post this bounty.", thrown.getMessage());
         assertNull(student.getTokenBalance());
@@ -80,9 +82,9 @@ public class EconomyServiceTests {
         when(userRepository.findByUsername("tutor1")).thenReturn(tutor);
 
         IllegalArgumentException missing = assertThrows(IllegalArgumentException.class, () ->
-                economyService.createRequestWithBounty("missing", new TutoringRequest(), 10));
+                economyService.createRequestWithBounty("missing", new TutoringRequest(), 10, null, null));
         IllegalArgumentException notStudent = assertThrows(IllegalArgumentException.class, () ->
-                economyService.createRequestWithBounty("tutor1", new TutoringRequest(), 10));
+                economyService.createRequestWithBounty("tutor1", new TutoringRequest(), 10, null, null));
 
         assertEquals("Invalid student account.", missing.getMessage());
         assertEquals("Invalid student account.", notStudent.getMessage());
@@ -94,7 +96,7 @@ public class EconomyServiceTests {
     @Test
     public void aNullBountyIsRejected() {
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () ->
-                economyService.createRequestWithBounty("student1", new TutoringRequest(), null));
+                economyService.createRequestWithBounty("student1", new TutoringRequest(), null, null, null));
 
         assertEquals("Bounty must be between 0 and 50 tokens.", thrown.getMessage());
         verify(userRepository, never()).findByUsername(any());

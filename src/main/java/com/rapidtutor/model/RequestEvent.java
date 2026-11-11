@@ -72,7 +72,7 @@ public class RequestEvent {
     }
 
     public String getSummary() {
-        if (fromStatus == null && "OPEN".equals(toStatus)) {
+        if (fromStatus == null && RequestStatus.OPEN.equals(toStatus)) {
             return "posted the request";
         }
         if (toStatus == null) {

@@ -1,10 +1,10 @@
 # LearnIT implementation
 
-Status as of November 3, 2026.
+LearnIT is a Spring Boot MVC application. A student tries to clear a course problem before a person is involved. They name what they are stuck on, Soquacktic writes one diagnostic note and can reply once to what the student types, and the student either writes what changed or asks for a peer tutor. Each attempt is kept on the student's **What I'm stuck on** page. The shared databank keeps course notes and the first diagnostic note written for each course and topic.
 
-LearnIT is a Spring Boot MVC application. A student tries to clear a course problem before a person is involved. They name what they are stuck on, Soquacktic writes one diagnostic note and can reply once to what the student types, and the student either writes what changed or asks for a peer tutor. Each attempt is kept on the student's **What I'm stuck on** page. The shared databank keeps course notes and those diagnostic notes. Nothing in that flow stops a student from getting help from a tutor somewhere else.
+Administrators approve tutor applications and manage accounts.
 
-An administrator approves tutors and keeps accounts working. That management is how the platform runs. It is not the innovation.
+LearnIT was developed under the working name RapidTutor, so packages, properties, and the database file use `rapidtutor`.
 
 ## Stack
 
@@ -32,7 +32,7 @@ Passwords are stored with BCrypt. A new account receives a recovery code, shown 
 | `DECLINED` | Admin declines an applicant | `/apply/status` |
 | `ADMIN` | Created from the overview, after an administrator already exists | `/admin` |
 
-Public registration creates students only. A student starts with 100 tokens. A tutor applicant starts with 0 and lists courses from `Courses.OFFERED`. Approval copies those courses onto `User.subjects` and sends a notification. The applicant's current session still carries the applicant role, so `/apply/status` tells an approved tutor to sign out and sign in again before opening the board. The first administrator on a machine is the optional local admin account. When those local accounts are enabled, the local student and tutor start with 100 tokens, the tutor is given every offered course, and the local admin starts with 0. Seeding skips, and prints a line, when a username or password is missing, a password fails `PasswordRules`, or the three usernames are not distinct. It does not insert accounts when the users table already has rows.
+Public registration creates students only. After a student or tutor applicant signs up, the form redirects to `/recovery-code`, which shows the code once from a flash attribute. Refreshing that page sends the user to the login page instead of submitting the form again. A student starts with 100 tokens. A tutor applicant starts with 0 and lists courses from `Courses.OFFERED`. Approval copies those courses onto `User.subjects` and sends a notification. The applicant's current session still carries the applicant role, so `/apply/status` tells an approved tutor to sign out and sign in again before opening the board. The first administrator on a machine is the optional local admin account. When those local accounts are enabled, the local student and tutor start with 100 tokens, the tutor is given every offered course, and the local admin starts with 0. Seeding skips, and prints a line, when a username or password is missing, a password fails `PasswordRules`, or the three usernames are not distinct. It does not insert accounts when the users table already has rows.
 
 A duplicate username or email that reaches the database's unique constraint, such as two sign-ups at once, is shown as the same form message as the normal duplicate check.
 
@@ -40,7 +40,7 @@ A duplicate username or email that reaches the database's unique constraint, suc
 
 ## Student flow
 
-The student home is **What I'm stuck on** at `/student/dashboard`. Its primary action is **I'm stuck**. Opening a request from a card returns with **Back**. The old request list is not linked from the student pages.
+The student home is **What I'm stuck on** at `/student/dashboard`. Its primary action is **I'm stuck**. Opening a request from a card returns with **Back**.
 
 ```mermaid
 flowchart LR
@@ -57,9 +57,9 @@ flowchart LR
 ```
 
 1. `POST /student/requests/duck` checks only the course, topic, and description through `RequestFields.blocker`. The course must be offered, the topic is at most 120 characters, and the description at most 2000. It saves a `DuckDraft` row for the student with the first note and outcome `TRYING`. The session holds only that draft's id.
-2. `AiDiagnosisService` asks Groq for three labeled lines: core concept, diagnostic question, and starting step. The call has a 5-second connect timeout and a 20-second read timeout. `DiagnosticNoteChecker` rejects a note that is missing a section, has a section over 500 characters, or contains a final answer or a code block. A rejected or failed call is replaced with the offline note from `SocraticNotes`. If `GROQ_API_KEY` is unset, the offline note is used immediately. The prompt does not receive a username, email, or student id.
+2. `AiDiagnosisService` asks Groq for three labeled lines: core concept, diagnostic question, and starting step. The call has a 5-second connect timeout and a 20-second read timeout. `DiagnosticNoteChecker` rejects a note that is missing a section, has a section over 500 characters, or contains a final answer or a code block. A rejected or failed call is replaced with the offline note from `SocraticNotes`. If no Groq key is set, either `groq.api.key` or `GROQ_API_KEY`, the offline note is used immediately. The prompt does not receive a username, email, or student id.
 3. `POST /student/requests/duck/reply` sends one follow-up that responds to the student's answer and stores both on the draft. A second reply is rejected. **Start over** clears the draft from the session so a new first note can be written.
-4. **I figured it out** requires a **What changed** entry of at most 500 characters. It calls `KnowledgeBankService.saveTriage` with the course, topic, and the note. The follow-up is the note when one exists. Otherwise the first note is stored. The student's description, answer, and takeaway are not copied into the article. The draft is marked `SOLVED` with the takeaway, and no request is posted.
+4. **I figured it out** requires a **What changed** entry of at most 500 characters. It calls `KnowledgeBankService.saveTriage` with the course, topic, and the note. The follow-up is the note when one exists. Otherwise the first note is used. `saveTriage` adds an article only when the note came from the model and no triage article exists yet for that course and topic. An offline note (`SocraticNotes.isOffline`) is never saved, and a later note never replaces the first one. The success message says whether the note was added. The student's description, answer, and takeaway are not copied into the article. The draft is marked `SOLVED` with the takeaway, and no request is posted.
 5. **I'm still stuck** (`POST /student/requests/duck/book`) requires the answer and then shows the booking fields: meeting method, response time, session length, and a bounty from 0 to 50. **Post request** (`POST /student/requests`) checks those through `RequestFields.booking`, escrows the bounty, stores the note and answer on the request, and records the `OPEN` event in one transaction. The server rejects a fourth open request. The draft is marked `ESCALATED` and keeps the new request id. A direct `POST /student/requests` without a draft in the session does not create a request.
 
 ## What I'm stuck on
@@ -71,15 +71,14 @@ What I'm stuck on lists the student's drafts, newest first. A trying draft is **
 Current limits:
 
 - Choosing Start over drops the session draft. The Trying row remains until the student chooses Continue.
-- Requests posted before these attempts were stored have no draft, so they have no card on What I'm stuck on. The student pages no longer link to the old request list.
 
 ## Request lifecycle
 
-1. An open request can be closed from the note. `TriageCloseService` refunds the bounty, sets `RESOLVED`, pays no tutor, deletes offers, notifies tutors who had offered a time, and saves the same note-only article.
+1. An open request can be closed from the note. `TriageCloseService` refunds the bounty, sets `RESOLVED`, pays no tutor, deletes offers, notifies tutors who had offered a time, and saves the note to the databank under the same rules as **I figured it out**.
 2. Tutors see open requests only when `SubjectMatcher` says their subjects cover the course. A tutor offers a future time. The request stays `OPEN`. The same tutor can replace their own offer or withdraw it. The student is notified.
 3. The student accepts one offer. `MeetingOfferService.accept` sets `CLAIMED`, `assignedTutorId`, `claimedTimestamp`, and `offeredMeetingTime`, then deletes every offer on that request. The tutor is notified. The tutor's name on the page is `User.getPublicName()` for that id. It is not copied onto the request or the offer.
 4. The student can cancel an open request. The bounty is refunded, offers are deleted, and tutors who had offered a time are notified. Either person can cancel a claimed session. The bounty is refunded and the other person is notified. Each cancel runs in one transaction with its event.
-5. The student can resolve a claimed session, which pays the bounty to the tutor, then leave one review scored from 1 to 5 with up to 1000 characters of feedback. That review adds 10 tokens to the student's balance in the same transaction. A second review of the same request is rejected.
+5. The student can resolve a claimed session, which pays the bounty to the tutor, then leave one review scored from 1 to 5 with up to 1000 characters of feedback. That review adds 10 tokens to the student's balance in the same transaction. A second review of the same request is rejected, including two submitted at the same moment, which the unique constraint on `Review.requestId` catches.
 6. `RequestExpiration.expireDue()` runs every 60 seconds. It loads open requests whose response time is `ASAP`, `Within 2 hours`, or `Today`. `ASAP` expires one hour after creation, `Within 2 hours` expires two hours after creation, and `Today` expires at the start of the next day. `Not urgent` does not expire. Each expired request is refunded, its offers are deleted, offering tutors are notified, and an `OPEN` to `EXPIRED` event is recorded, in its own transaction. It does not set `canceledTimestamp`. That field is only for a cancel. Offering or accepting a time after the deadline is rejected even when the sweep has not run yet.
 
 Student cancel, resolve, review, triage close, takeaway, and details actions check that the signed-in student owns the request or draft.
@@ -94,7 +93,7 @@ An open request with no offers reloads its details page every 30 seconds to pick
 
 `GET /student/knowledge` lists the shared notes. A triage article shows the course, the topic, the label Soquacktic, and the diagnostic note. It does not show the student's description or answer. Seeded course notes still show their question and solution.
 
-`GET /api/knowledge/search?topic=&course=` returns at most one article whose course is one of the offered courses and whose topic contains the text. A triage note is chosen before a seeded course note. Talk it through calls it 300 ms after the student stops typing, and only when the topic is longer than 3 characters. The topic field's example changes with the course and is a phrase from that course's seeded note: UML Sequence Diagrams for HCDD 412, Sprint goal versus a task list for IST 440W, class versus object for IST 311, client versus server for HCDD 411, heuristic review for HCDD 331, and reading a truth table for IST 230. For a triage row, the form skips the stored question, including an older row that already contains a student's paragraph.
+`GET /api/knowledge/search?topic=&course=` returns at most one article, with its note already split into labeled sections, whose course is one of the offered courses and whose topic contains the text. A triage note is chosen before a seeded course note. Talk it through calls it 300 ms after the student stops typing, and only when the topic is longer than 3 characters. The topic field's example changes with the course and is a phrase from that course's seeded note: UML Sequence Diagrams for HCDD 412, Sprint goal versus a task list for IST 440W, class versus object for IST 311, client versus server for HCDD 411, heuristic review for HCDD 331, and reading a truth table for IST 230. For a saved Soquacktic note, the form shows only the note, not the stored question.
 
 ## Admin
 
@@ -103,4 +102,5 @@ The overview lists accounts, tutor applications, and request counts by status. I
 ## Later work
 
 - Comparing a new draft with a prior instructor comment is not part of this build.
+- Login has no limit on repeated attempts. Throttling or a lockout would come before any public deployment.
 - A broader visual pass is separate from this behavior.

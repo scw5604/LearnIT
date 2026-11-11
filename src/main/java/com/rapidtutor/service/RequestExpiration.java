@@ -1,5 +1,6 @@
 package com.rapidtutor.service;
 
+import com.rapidtutor.model.RequestStatus;
 import com.rapidtutor.model.TutoringRequest;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import org.slf4j.Logger;
@@ -30,7 +31,7 @@ public class RequestExpiration {
     @Scheduled(fixedDelay = 60_000)
     public void expireDue() {
         LocalDateTime now = LocalDateTime.now(clock);
-        for (TutoringRequest request : requestRepository.findByStatusAndDesiredResponseTimeIn("OPEN", EXPIRING)) {
+        for (TutoringRequest request : requestRepository.findByStatusAndDesiredResponseTimeIn(RequestStatus.OPEN, EXPIRING)) {
             LocalDateTime deadline = deadline(request);
             if (deadline != null && !now.isBefore(deadline)) {
                 try {

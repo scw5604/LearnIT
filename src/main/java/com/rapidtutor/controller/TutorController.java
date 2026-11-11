@@ -9,7 +9,9 @@ import com.rapidtutor.repository.ReviewRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.EconomyService;
+import com.rapidtutor.service.InvalidMeetingTimeException;
 import com.rapidtutor.service.MeetingOfferService;
+import com.rapidtutor.service.PublicNames;
 import com.rapidtutor.service.SubjectMatcher;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -27,6 +29,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.rapidtutor.model.RequestStatus.CLAIMED;
+import static com.rapidtutor.model.RequestStatus.OPEN;
+
 @Controller
 @RequestMapping("/tutor")
 public class TutorController {
@@ -38,11 +43,13 @@ public class TutorController {
     private final MeetingOfferService meetingOfferService;
     private final RequestEventRepository eventRepository;
     private final EconomyService economyService;
+    private final PublicNames publicNames;
 
     public TutorController(TutoringRequestRepository requestRepository, UserRepository userRepository,
                            ReviewRepository reviewRepository, MeetingOfferRepository offerRepository,
                            MeetingOfferService meetingOfferService,
-                           RequestEventRepository eventRepository, EconomyService economyService) {
+                           RequestEventRepository eventRepository, EconomyService economyService,
+                           PublicNames publicNames) {
         this.requestRepository = requestRepository;
         this.userRepository = userRepository;
         this.reviewRepository = reviewRepository;
@@ -50,17 +57,18 @@ public class TutorController {
         this.meetingOfferService = meetingOfferService;
         this.eventRepository = eventRepository;
         this.economyService = economyService;
+        this.publicNames = publicNames;
     }
 
     @GetMapping("/board")
     public String showTutorBoard(Model model, Principal principal) {
         User tutor = requireTutor(principal);
 
-        List<TutoringRequest> openRequests = requestRepository.findByStatus("OPEN").stream()
+        List<TutoringRequest> openRequests = requestRepository.findByStatus(OPEN).stream()
                 .filter(req -> SubjectMatcher.covers(tutor.getSubjects(), req.getCourse()))
                 .toList();
         List<TutoringRequest> myClaimedRequests =
-                requestRepository.findByStatusAndAssignedTutorId("CLAIMED", tutor.getId());
+                requestRepository.findByStatusAndAssignedTutorId(CLAIMED, tutor.getId());
 
         Map<Long, List<MeetingOffer>> offersByRequest = new HashMap<>();
         for (MeetingOffer offer : offerRepository.findByTutorId(tutor.getId())) {
@@ -101,12 +109,11 @@ public class TutorController {
         try {
             meetingOfferService.saveOffer(tutor, id, time);
             redirectAttributes.addFlashAttribute("successMessage", "Time offered. The request stays open until the student accepts it.");
+        } catch (InvalidMeetingTimeException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            redirectAttributes.addFlashAttribute("timeError", true);
         } catch (IllegalStateException | IllegalArgumentException e) {
             redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
-            if (e.getMessage() != null && e.getMessage().toLowerCase().contains("time")) {
-                redirectAttributes.addFlashAttribute("timeError", true);
-            }
-            return redirect;
         }
         return redirect;
     }
@@ -149,7 +156,7 @@ public class TutorController {
         }
 
         boolean assignedToMe = tutor.getId().equals(request.getAssignedTutorId());
-        boolean openInMySubjects = "OPEN".equals(request.getStatus())
+        boolean openInMySubjects = OPEN.equals(request.getStatus())
                 && SubjectMatcher.covers(tutor.getSubjects(), request.getCourse());
         if (!assignedToMe && !openInMySubjects) {
             redirectAttributes.addFlashAttribute("errorMessage", "This request is outside your subjects.");
@@ -157,38 +164,14 @@ public class TutorController {
         }
 
         model.addAttribute("request", request);
-        model.addAttribute("tutorName", tutorDisplayName(request));
+        model.addAttribute("tutorName", publicNames.of(request.getAssignedTutorId()));
         model.addAttribute("events", eventRepository.findByRequestIdOrderByAtAsc(request.getId()));
-        if ("OPEN".equals(request.getStatus())) {
+        if (OPEN.equals(request.getStatus())) {
             List<MeetingOffer> offers = offerRepository.findByRequestIdOrderByOfferedTimeAsc(request.getId());
             model.addAttribute("offers", offers);
-            model.addAttribute("tutorNamesById", publicNames(offers));
+            model.addAttribute("tutorNamesById", publicNames.byId(offers.stream().map(MeetingOffer::getTutorId).toList()));
         }
         return "tutor/request-details";
-    }
-
-    private String tutorDisplayName(TutoringRequest request) {
-        if (request.getAssignedTutorId() == null) {
-            return null;
-        }
-        return userRepository.findById(request.getAssignedTutorId()).map(User::getPublicName).orElse(null);
-    }
-
-    private Map<Long, String> publicNames(List<MeetingOffer> offers) {
-        List<Long> tutorIds = new ArrayList<>();
-        for (MeetingOffer offer : offers) {
-            if (offer.getTutorId() != null && !tutorIds.contains(offer.getTutorId())) {
-                tutorIds.add(offer.getTutorId());
-            }
-        }
-        Map<Long, String> names = new HashMap<>();
-        if (tutorIds.isEmpty()) {
-            return names;
-        }
-        for (User user : userRepository.findAllById(tutorIds)) {
-            names.put(user.getId(), user.getPublicName());
-        }
-        return names;
     }
 
     private LocalDateTime parseTime(String value) {

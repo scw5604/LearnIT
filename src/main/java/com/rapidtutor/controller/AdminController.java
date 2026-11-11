@@ -1,12 +1,13 @@
 package com.rapidtutor.controller;
 
 import com.rapidtutor.model.AccountForm;
+import com.rapidtutor.model.RequestStatus;
 import com.rapidtutor.model.Review;
-import com.rapidtutor.model.User;
 import com.rapidtutor.repository.ReviewRepository;
 import com.rapidtutor.repository.TutoringRequestRepository;
 import com.rapidtutor.repository.UserRepository;
 import com.rapidtutor.service.AccountService;
+import com.rapidtutor.service.PublicNames;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
@@ -31,13 +32,16 @@ public class AdminController {
     private final TutoringRequestRepository requestRepository;
     private final ReviewRepository reviewRepository;
     private final AccountService accountService;
+    private final PublicNames publicNames;
 
     public AdminController(UserRepository userRepository, TutoringRequestRepository requestRepository,
-                           ReviewRepository reviewRepository, AccountService accountService) {
+                           ReviewRepository reviewRepository, AccountService accountService,
+                           PublicNames publicNames) {
         this.userRepository = userRepository;
         this.requestRepository = requestRepository;
         this.reviewRepository = reviewRepository;
         this.accountService = accountService;
+        this.publicNames = publicNames;
     }
 
     @GetMapping
@@ -72,26 +76,26 @@ public class AdminController {
     }
 
     @PostMapping("/administrators")
-    public String createAdministrator(@ModelAttribute AccountForm accountForm, Model model) {
+    public String createAdministrator(@ModelAttribute AccountForm accountForm, Model model,
+                                      RedirectAttributes redirectAttributes) {
+        String error;
         try {
             AccountService.CreatedAccount created = accountService.createAdministrator(
                     accountForm.getDisplayName(), accountForm.getEmail(), accountForm.getUsername(),
                     accountForm.getPassword(), accountForm.getConfirmPassword());
-            model.addAttribute("successMessage",
+            redirectAttributes.addFlashAttribute("successMessage",
                     "Administrator " + created.user().getUsername() + " was created. Recovery code: "
                             + created.recoveryCode() + ". Share the temporary password and this code. It will not be shown again.");
-            model.addAttribute("accountForm", new AccountForm());
+            return "redirect:/admin";
         } catch (DataIntegrityViolationException e) {
-            accountForm.setPassword(null);
-            accountForm.setConfirmPassword(null);
-            model.addAttribute("accountForm", accountForm);
-            model.addAttribute("errorMessage", duplicateAccountMessage(accountForm));
+            error = accountService.duplicateAccountMessage(accountForm.getUsername());
         } catch (IllegalArgumentException e) {
-            accountForm.setPassword(null);
-            accountForm.setConfirmPassword(null);
-            model.addAttribute("accountForm", accountForm);
-            model.addAttribute("errorMessage", e.getMessage());
+            error = e.getMessage();
         }
+        accountForm.setPassword(null);
+        accountForm.setConfirmPassword(null);
+        model.addAttribute("accountForm", accountForm);
+        model.addAttribute("errorMessage", error);
         fillOverview(model);
         return "admin/dashboard";
     }
@@ -99,7 +103,7 @@ public class AdminController {
     @GetMapping("/insights")
     public String insights(Model model) {
         Map<String, Long> counts = statusCounts();
-        model.addAttribute("resolvedCount", countOf(counts, "RESOLVED"));
+        model.addAttribute("resolvedCount", countOf(counts, RequestStatus.RESOLVED));
         model.addAttribute("resolvedWithNoteCount", requestRepository.countResolvedWithDiagnosticNote());
         List<LabelCount> courseCounts = toLabelCounts(requestRepository.countGroupedByCourse());
         List<LabelCount> topicCounts = toLabelCounts(requestRepository.countGroupedByTopic(PageRequest.of(0, 10)));
@@ -117,11 +121,11 @@ public class AdminController {
         Map<String, Long> counts = statusCounts();
         model.addAttribute("users", userRepository.findAll());
         model.addAttribute("applicants", userRepository.findByRoleOrderByUsernameAsc("APPLICANT"));
-        model.addAttribute("openCount", countOf(counts, "OPEN"));
-        model.addAttribute("claimedCount", countOf(counts, "CLAIMED"));
-        model.addAttribute("resolvedCount", countOf(counts, "RESOLVED"));
-        model.addAttribute("canceledCount", countOf(counts, "CANCELED"));
-        model.addAttribute("expiredCount", countOf(counts, "EXPIRED"));
+        model.addAttribute("openCount", countOf(counts, RequestStatus.OPEN));
+        model.addAttribute("claimedCount", countOf(counts, RequestStatus.CLAIMED));
+        model.addAttribute("resolvedCount", countOf(counts, RequestStatus.RESOLVED));
+        model.addAttribute("canceledCount", countOf(counts, RequestStatus.CANCELED));
+        model.addAttribute("expiredCount", countOf(counts, RequestStatus.EXPIRED));
     }
 
     private Map<String, Long> statusCounts() {
@@ -136,14 +140,6 @@ public class AdminController {
 
     private long countOf(Map<String, Long> counts, String status) {
         return counts.getOrDefault(status, 0L);
-    }
-
-    private String duplicateAccountMessage(AccountForm accountForm) {
-        String username = accountForm.getUsername() == null ? "" : accountForm.getUsername().trim();
-        if (userRepository.findByUsernameIgnoreCase(username) != null) {
-            return "That username is already taken.";
-        }
-        return "That email is already registered.";
     }
 
     private long maxCount(List<LabelCount> counts) {
@@ -183,7 +179,7 @@ public class AdminController {
 
     private List<ReviewRow> recentReviews() {
         List<Review> reviews = reviewRepository.findTop20ByOrderByCreatedAtDesc();
-        Map<Long, String> names = tutorNames(reviews.stream().map(Review::getTutorId).toList());
+        Map<Long, String> names = publicNames.byId(reviews.stream().map(Review::getTutorId).toList());
         List<ReviewRow> rows = new ArrayList<>();
         for (Review review : reviews) {
             String tutor = names.getOrDefault(review.getTutorId(), "Unknown");
@@ -198,7 +194,7 @@ public class AdminController {
         for (Object[] row : rows) {
             tutorIds.add(((Number) row[0]).longValue());
         }
-        Map<Long, String> names = tutorNames(tutorIds);
+        Map<Long, String> names = publicNames.byId(tutorIds);
         List<TutorScore> scores = new ArrayList<>();
         for (Object[] row : rows) {
             Long tutorId = ((Number) row[0]).longValue();
@@ -207,17 +203,6 @@ public class AdminController {
             scores.add(new TutorScore(names.getOrDefault(tutorId, "Tutor " + tutorId), average, reviews));
         }
         return scores;
-    }
-
-    private Map<Long, String> tutorNames(List<Long> tutorIds) {
-        Map<Long, String> names = new HashMap<>();
-        if (tutorIds.isEmpty()) {
-            return names;
-        }
-        for (User user : userRepository.findAllById(tutorIds)) {
-            names.put(user.getId(), user.getPublicName());
-        }
-        return names;
     }
 
     public record LabelCount(String label, long count) {

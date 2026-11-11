@@ -20,8 +20,8 @@ public class KnowledgeArticle {
     @Column(length = 2000, nullable = false)
     private String problemDescription;
 
-    @Column(length = 2000, nullable = false)
-    private String verifiedSolution;
+    @Column(name = "verified_solution", length = 2000, nullable = false)
+    private String noteText;
 
     /** Null for seeded course notes. "triage" for a note saved from a student. */
     @Column(length = 20)
@@ -31,11 +31,11 @@ public class KnowledgeArticle {
 
     public KnowledgeArticle() {}
 
-    public KnowledgeArticle(String course, String topic, String problemDescription, String verifiedSolution) {
+    public KnowledgeArticle(String course, String topic, String problemDescription, String noteText) {
         this.course = course;
         this.topic = topic;
         this.problemDescription = problemDescription;
-        this.verifiedSolution = verifiedSolution;
+        this.noteText = noteText;
     }
 
     public String getProblemDescription() {
@@ -70,12 +70,12 @@ public class KnowledgeArticle {
         this.topic = topic;
     }
 
-    public String getVerifiedSolution() {
-        return verifiedSolution;
+    public String getNoteText() {
+        return noteText;
     }
 
-    public void setVerifiedSolution(String verifiedSolution) {
-        this.verifiedSolution = verifiedSolution;
+    public void setNoteText(String noteText) {
+        this.noteText = noteText;
     }
 
     public String getKind() {
