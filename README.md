@@ -44,6 +44,10 @@ LearnIT was developed under the working name RapidTutor, so packages, properties
    rapidtutor.demo-users.admin.username=demoAdmin
    rapidtutor.demo-users.admin.password=<choose one, 10+ characters>
    ```
+   Open the file in any text editor and replace each placeholder, including the angle brackets. From the project folder:
+   - **Windows:** `notepad application-local.properties`
+   - **macOS:** `open -e application-local.properties`
+   - **Linux:** `nano application-local.properties`
    Each password must be at least 10 characters, must not be `password`, and must not match its username. This file is gitignored, so the key and passwords stay on your machine. You can instead set the key in a `GROQ_API_KEY` environment variable, as long as this file does not set `groq.api.key` itself.
 4. **macOS / Linux only:** `chmod +x mvnw`
 
