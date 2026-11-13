@@ -16,10 +16,11 @@ LearnIT was developed under the working name RapidTutor, so packages, properties
 ## Prerequisites
 
 - **JDK 21 or newer**, with `java` on your `PATH` (check with `java -version`). The recorded demo ran on JDK 25.0.1.
+- **Git**, to clone the repository (check with `git --version`).
 - **Internet access.** On first run, the Maven Wrapper downloads Maven 3.9.16 and all dependencies, which takes a few minutes. The live diagnostic note also calls `api.groq.com`.
 - **A Groq API key.** Create a free key at [console.groq.com](https://console.groq.com).
 - A global Maven install is **not** required; this repo includes the Maven Wrapper (`mvnw` / `mvnw.cmd`).
-- Port **8080** must be free.
+- Port **8080** must be free. On Windows, `netstat -ano | findstr ":8080"` prints nothing when the port is free, and a `LISTENING` line means something else is using it. On macOS or Linux, `lsof -nP -iTCP:8080 -sTCP:LISTEN` does the same.
 
 ## Setup (required)
 
